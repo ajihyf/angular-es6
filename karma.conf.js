@@ -1,20 +1,20 @@
 module.exports = function (config) {
   config.set({
-    basePath: '..',
+    basePath: '.',
     autoWatch: false,
     frameworks: ['mocha'],
     colors: true,
     files: [
       'node_modules/babel-polyfill/dist/polyfill.js',
       {
-        pattern: 'test/karma.tests.js',
+        pattern: 'test/test.index.js',
         watched: false,
         served: true,
         included: true
       }
     ],
     preprocessors: {
-      'test/karma.tests.js': ['eslint', 'webpack', 'sourcemap']
+      'test/test.index.js': ['webpack', 'sourcemap']
     },
     browsers: ['PhantomJS'],
     plugins: [
@@ -53,7 +53,6 @@ module.exports = function (config) {
         extensions: ['', '.js'],
         modulesDirectories: [
           'node_modules',
-          './'
         ]
       }
     },
