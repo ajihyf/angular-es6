@@ -1,0 +1,12 @@
+{
+  "presets": ["es2015", "stage-0"],
+  "plugins": [
+    ["transform-replace-object-assign", "simple-assign"],
+    "transform-dev-warning"
+  ],
+  "env": {
+    "test": {
+      "sourceMaps": "both"
+    }
+  }
+}
