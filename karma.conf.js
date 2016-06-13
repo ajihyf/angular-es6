@@ -41,18 +41,12 @@ module.exports = function (config) {
               cacheDirectory: true
             }
           }
-        ],
-        noParse: [
-          /node_modules\/sinon\//
         ]
       },
       resolve: {
-        alias: {
-          sinon: 'sinon/pkg/sinon.js'
-        },
         extensions: ['', '.js'],
         modulesDirectories: [
-          'node_modules',
+          'node_modules'
         ]
       }
     },
