@@ -745,4 +745,302 @@ describe('Scope', function () {
       expect(postDigestFn).to.have.been.calledOnce
     })
   })
+
+  describe('inheritance', function () {
+    it('inherits the parent\'s properties', function () {
+      scope.someValue = 233
+      const child = scope.$new()
+
+      expect(child.someValue).to.equal(233)
+    })
+
+    it('does not cause a parent to inherit its properties', function () {
+      const child = scope.$new()
+
+      child.someValue = 233
+      expect(scope.someValue).to.be.undefined
+    })
+
+    it('inherits the parent\'s value whenever the are defined', function () {
+      const child = scope.$new()
+      scope.someValue = 233
+
+      expect(child.someValue).to.equal(233)
+    })
+
+    it('can manipulate parent\'s properties', function () {
+      const child = scope.$new()
+      scope.arr = [0, 1, 2]
+
+      child.arr.push(3)
+      expect(child.arr).to.deep.equal([0, 1, 2, 3])
+      expect(scope.arr).to.deep.equal([0, 1, 2, 3])
+    })
+
+    it('can watch a property in parent', function () {
+      const child = scope.$new()
+      const listenerFn = sinon.spy()
+      scope.arr = [0, 1, 2]
+
+      child.$watch(
+        scope => scope.arr,
+        listenerFn,
+        true
+      )
+
+      child.$digest()
+      expect(listenerFn).to.have.been.calledOnce
+
+      scope.arr.push(3)
+      child.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+    })
+
+    it('can be nested at any depth', function () {
+      const c1 = scope.$new()
+      const c2 = scope.$new()
+      const c1c1 = c1.$new()
+      const c1c2 = c1.$new()
+      const c2c1 = c2.$new()
+
+      scope.someValue = 233
+      expect(c1.someValue).to.equal(233)
+      expect(c2.someValue).to.equal(233)
+      expect(c1c1.someValue).to.equal(233)
+      expect(c1c2.someValue).to.equal(233)
+      expect(c2c1.someValue).to.equal(233)
+
+      c2.anotherValue = 256
+      expect(c2c1.anotherValue).to.equal(256)
+      expect(c1.anotherValue).to.be.undefined
+      expect(c1c1.anotherValue).to.be.undefined
+      expect(c1c2.anotherValue).to.be.undefined
+    })
+
+    it('shadows parent\'s property with the same name', function () {
+      const child = scope.$new()
+
+      scope.someValue = 233
+      child.someValue = 256
+
+      expect(scope.someValue).to.equal(233)
+      expect(child.someValue).to.equal(256)
+    })
+
+    it('does not deeply shadow parents\'s properties', function () {
+      const child = scope.$new()
+
+      scope.user = { name: 'Aji' }
+      child.user.name = 'Keal'
+
+      expect(child.user.name).to.equal('Keal')
+      expect(scope.user.name).to.equal('Keal')
+    })
+
+    it('does not digest its parent', function () {
+      const child = scope.$new()
+      const listenerFn = sinon.spy()
+
+      scope.someValue = 233
+      scope.$watch(
+        scope => scope.someValue,
+        listenerFn
+      )
+
+      child.$digest()
+      expect(listenerFn).to.have.not.been.called
+    })
+
+    it('keeps a record of its children', function () {
+      const child1 = scope.$new()
+      const child2 = scope.$new()
+      const child2child1 = child2.$new()
+
+      expect(scope.$$children).to.have.lengthOf(2)
+      expect(scope.$$children[0]).to.equal(child1)
+      expect(scope.$$children[1]).to.equal(child2)
+
+      expect(child1.$$children).to.have.lengthOf(0)
+      expect(child2.$$children).to.have.lengthOf(1)
+      expect(child2.$$children[0]).to.equal(child2child1)
+    })
+
+    it('digests its children', function () {
+      scope.someValue = 233
+      const child = scope.$new()
+      const listenerFn = sinon.spy()
+
+      child.$watch(
+        scope => scope.someValue,
+        listenerFn
+      )
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledOnce
+    })
+
+    it('digests from root when $apply', function () {
+      scope.someValue = 233
+      const child1 = scope.$new()
+      const child1child1 = child1.$new()
+      const listenerFn = sinon.spy()
+
+      scope.$watch(
+        scope => scope.someValue,
+        listenerFn
+      )
+
+      child1child1.$apply(() => {})
+      expect(listenerFn).to.have.been.calledOnce
+    })
+
+    it('schedules a digest from root on $evalAsync', function (done) {
+      scope.someValue = 233
+      const child1 = scope.$new()
+      const child1child1 = child1.$new()
+      const listenerFn = sinon.spy()
+
+      scope.$watch(
+        scope => scope.someValue,
+        listenerFn
+      )
+
+      child1child1.$evalAsync(() => {})
+      setTimeout(() => {
+        expect(listenerFn).to.have.been.calledOnce
+        done()
+      }, 10)
+    })
+
+    it('does not have access to parent scope attributes when isolated', function () {
+      scope.someValue = 233
+      const child = scope.$new(true)
+
+      expect(child.someValue).to.be.undefined
+    })
+
+    it('digests its isolated children', function () {
+      const child = scope.$new(true)
+      child.someValue = 233
+      const listenerFn = sinon.spy()
+
+      child.$watch(
+        scope => scope.someValue,
+        listenerFn
+      )
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledOnce
+    })
+
+    it('digests from root on $apply when isolated', function () {
+      scope.someValue = 233
+      const child1 = scope.$new(true)
+      const child1child1 = child1.$new()
+      const listenerFn = sinon.spy()
+
+      scope.$watch(
+        scope => scope.someValue,
+        listenerFn
+      )
+
+      child1child1.$apply(() => {})
+      expect(listenerFn).to.have.been.calledOnce
+    })
+
+    it('schedules a digest from root on $evalAsync when isolated', function (done) {
+      scope.someValue = 233
+      const child1 = scope.$new(true)
+      const child1child1 = child1.$new()
+      const listenerFn = sinon.spy()
+
+      scope.$watch(
+        scope => scope.someValue,
+        listenerFn
+      )
+
+      child1child1.$evalAsync(() => {})
+      setTimeout(() => {
+        expect(listenerFn).to.have.been.calledOnce
+        done()
+      }, 10)
+    })
+
+    it('executes $evalAsync functions on isolated scopes', function (done) {
+      const child = scope.$new(true)
+      const evalFn = sinon.spy()
+
+      child.$evalAsync(evalFn)
+      setTimeout(() => {
+        expect(evalFn).to.have.been.calledOnce
+        done()
+      }, 10)
+    })
+
+    it('executes $$postDigest functions on isolated scopes', function () {
+      const child = scope.$new(true)
+      const postDigestFn = sinon.spy()
+
+      child.$$postDigest(postDigestFn)
+      scope.$digest()
+
+      expect(postDigestFn).to.have.been.calledOnce
+    })
+
+    it('coalesces $applyAsync functions in isolated scopes', function (done) {
+      const child1 = scope.$new(true)
+      const child2 = scope.$new(true)
+      const watchFn = sinon.spy()
+
+      child1.$watch(watchFn)
+      child1.$applyAsync(scope => { scope.someValue = 233 })
+      child2.$applyAsync(scope => { scope.someValue = 256 })
+
+      setTimeout(() => {
+        expect(watchFn).to.have.been.calledTwice
+        done()
+      }, 10)
+    })
+
+    it('can take some other scope as the parent', function () {
+      const anotherScope = new Scope()
+      const child = scope.$new(false, anotherScope)
+      const childWatcherFn = sinon.spy()
+
+      scope.someValue = 233
+      expect(child.someValue).to.equal(233)
+
+      child.$watch(childWatcherFn)
+
+      scope.$digest()
+      expect(childWatcherFn).to.have.not.been.called
+
+      anotherScope.$digest()
+      expect(childWatcherFn).to.have.been.calledTwice
+    })
+
+    it('not longer digests after $destroy', function () {
+      const child = scope.$new()
+      const listenerFn = sinon.spy()
+
+      child.arr = [0, 1, 2]
+      child.$watch(
+        scope => scope.arr,
+        listenerFn,
+        true
+      )
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledOnce
+
+      child.arr.push(3)
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+
+      child.$destroy()
+      child.arr.push(4)
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+    })
+  })
 })

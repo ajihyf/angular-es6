@@ -20,6 +20,9 @@ class Scope {
   $$applyAsyncId = null
   $$phase = null
   $$postDigestQueue = []
+  $$children = []
+  $root = this
+  $parent = null
 
   $$postDigest (fn) {
     this.$$postDigestQueue.push(fn)
@@ -31,7 +34,7 @@ class Scope {
       return this.$eval(expr)
     } finally {
       this.$clearPhase()
-      this.$digest()
+      this.$root.$digest()
     }
   }
 
@@ -39,16 +42,16 @@ class Scope {
     this.$$applyAsyncQueue.push(() => {
       this.$eval(expr)
     })
-    if (this.$$applyAsyncId === null) {
-      this.$$applyAsyncId = setTimeout(() => {
+    if (this.$root.$$applyAsyncId === null) {
+      this.$root.$$applyAsyncId = setTimeout(() => {
         this.$apply(() => {
-          this.$flushApplyAsync()
+          this.$$flushApplyAsync()
         })
       }, 0)
     }
   }
 
-  $flushApplyAsync () {
+  $$flushApplyAsync () {
     while (this.$$applyAsyncQueue.length) {
       try {
         this.$$applyAsyncQueue.shift()()
@@ -56,7 +59,7 @@ class Scope {
         console.error(err)
       }
     }
-    this.$$applyAsyncId = null
+    this.$root.$$applyAsyncId = null
   }
 
   $beginPhase (phase) {
@@ -78,7 +81,7 @@ class Scope {
     if (!this.$$phase && !this.$$asyncQueue.length) {
       setTimeout(() => {
         if (this.$$asyncQueue.length) {
-          this.$digest()
+          this.$root.$digest()
         }
       }, 0)
     }
@@ -96,12 +99,12 @@ class Scope {
       last: initWatchVal
     }
     this.$$watchers.unshift(watcher)
-    this.$$lastDirtyWatch = null
+    this.$root.$$lastDirtyWatch = null
     return () => {
       const index = this.$$watchers.indexOf(watcher)
       if (index >= 0) {
         this.$$watchers.splice(index, 1)
-        this.$$lastDirtyWatch = null
+        this.$root.$$lastDirtyWatch = null
       }
     }
   }
@@ -152,27 +155,32 @@ class Scope {
     }
   }
 
-  $digestOnce () {
+  $$digestOnce () {
     let dirty = false
-    _.eachRight(this.$$watchers, watcher => {
-      try {
-        if (watcher) {
-          const newValue = watcher.watchFn(this)
-          const oldValue = watcher.last
-          if (!areEqual(newValue, oldValue, watcher.valueEq)) {
-            this.$$lastDirtyWatch = watcher
-            watcher.last = watcher.valueEq ? _.cloneDeep(newValue) : newValue
-            watcher.listenerFn(newValue,
-              (oldValue === initWatchVal ? newValue : oldValue),
-              this)
-            dirty = true
-          } else if (this.$$lastDirtyWatch === watcher) {
-            return false
+    let continueLoop = true
+    this.$$everyScope(scope => {
+      _.eachRight(scope.$$watchers, watcher => {
+        try {
+          if (watcher) {
+            const newValue = watcher.watchFn(scope)
+            const oldValue = watcher.last
+            if (!areEqual(newValue, oldValue, watcher.valueEq)) {
+              scope.$root.$$lastDirtyWatch = watcher
+              watcher.last = watcher.valueEq ? _.cloneDeep(newValue) : newValue
+              watcher.listenerFn(newValue,
+                (oldValue === initWatchVal ? newValue : oldValue),
+                scope)
+              dirty = true
+            } else if (scope.$root.$$lastDirtyWatch === watcher) {
+              continueLoop = false
+              return false
+            }
           }
+        } catch (err) {
+          console.error(err)
         }
-      } catch (err) {
-        console.error(err)
-      }
+      })
+      return continueLoop
     })
     return dirty
   }
@@ -180,12 +188,12 @@ class Scope {
   $digest () {
     let dirty = false
     let ttl = maxTTL
-    this.$$lastDirtyWatch = null
+    this.$root.$$lastDirtyWatch = null
     this.$beginPhase('$digest')
 
-    if (this.$$applyAsyncId) {
-      clearTimeout(this.$$applyAsyncId)
-      this.$flushApplyAsync()
+    if (this.$root.$$applyAsyncId) {
+      clearTimeout(this.$root.$$applyAsyncId)
+      this.$$flushApplyAsync()
     }
 
     do {
@@ -197,7 +205,7 @@ class Scope {
           console.error(err)
         }
       }
-      dirty = this.$digestOnce()
+      dirty = this.$$digestOnce()
       if (dirty || this.$$asyncQueue.length) {
         ttl--
         if (ttl < 0) {
@@ -216,6 +224,43 @@ class Scope {
     }
 
     this.$clearPhase()
+  }
+
+  $new (isolated = false, parent = this) {
+    let child
+    if (isolated) {
+      child = new Scope()
+      child.$root = parent.$root
+      child.$$asyncQueue = parent.$$asyncQueue
+      child.$$postDigestQueue = parent.$$postDigestQueue
+      child.$$applyAsyncQueue = parent.$$applyAsyncQueue
+    } else {
+      child = Object.create(this)
+    }
+    parent.$$children.push(child)
+    child.$$watchers = []
+    child.$$children = []
+    child.$parent = parent
+    return child
+  }
+
+  $$everyScope (fn) {
+    if (fn(this)) {
+      return this.$$children.every(child => child.$$everyScope(fn))
+    } else {
+      return false
+    }
+  }
+
+  $destroy () {
+    if (this.$parent) {
+      const siblings = this.$parent.$$children
+      const index = siblings.indexOf(this)
+      if (index >= 0) {
+        siblings.splice(index, 1)
+      }
+    }
+    this.$$watchers = null
   }
 }
 
