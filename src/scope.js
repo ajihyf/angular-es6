@@ -12,6 +12,16 @@ function areEqual (newValue, oldValue, valueEq) {
   }
 }
 
+function strictIsArrayLike (obj) {
+  const isArrayLike = _.isArrayLike(obj)
+  if (isArrayLike) {
+    if (obj.length > 0) {
+      return obj.hasOwnProperty(obj.length - 1)
+    }
+  }
+  return isArrayLike
+}
+
 class Scope {
   $$watchers = []
   $$lastDirtyWatch = null
@@ -153,6 +163,90 @@ class Scope {
         destroyFn()
       })
     }
+  }
+
+  $watchCollection (watchFn, listenerFn) {
+    let newValue, oldValue
+    let changeCount = 0
+    let oldLength
+    const trackVeryOldValue = listenerFn.length > 1
+    let veryOldValue
+    let firstRun = true
+
+    const internalWatchFn = (scope) => {
+      let newLength
+      newValue = watchFn(scope)
+
+      if (_.isObject(newValue)) {
+        if (strictIsArrayLike(newValue)) {
+          if (!_.isArray(oldValue)) {
+            changeCount++
+            oldValue = []
+          }
+          if (newValue.length !== oldValue.length) {
+            changeCount++
+            oldValue.length = newValue.length
+          }
+          _.each(newValue, (newValueItem, i) => {
+            if (!areEqual(newValueItem, oldValue[i], false)) {
+              changeCount++
+              oldValue[i] = newValueItem
+            }
+          })
+        } else {
+          if (!_.isObject(oldValue) || strictIsArrayLike(oldValue)) {
+            changeCount++
+            oldValue = {}
+            oldLength = 0
+          }
+          newLength = 0
+          _.forOwn(newValue, (newValueVal, key) => {
+            newLength++
+            if (oldValue.hasOwnProperty(key)) {
+              if (!areEqual(newValueVal, oldValue[key], false)) {
+                changeCount++
+                oldValue[key] = newValueVal
+              }
+            } else {
+              changeCount++
+              oldLength++
+              oldValue[key] = newValueVal
+            }
+          })
+          if (oldLength > newLength) {
+            changeCount++
+            _.forOwn(oldValue, (oldValueVal, key) => {
+              if (!newValue.hasOwnProperty(key)) {
+                oldLength--
+                delete oldValue[key]
+              }
+            })
+          }
+        }
+      } else {
+        if (!areEqual(newValue, oldValue, false)) {
+          changeCount++
+        }
+        oldValue = newValue
+      }
+
+      return changeCount
+    }
+
+    const internalListenerFn = () => {
+      if (firstRun) {
+        listenerFn(newValue, newValue, this)
+        firstRun = false
+      } else {
+        listenerFn(newValue, veryOldValue, this)
+      }
+
+      if (trackVeryOldValue) {
+        veryOldValue = _.clone(newValue)
+      }
+    }
+
+    return this.$watch(internalWatchFn, internalListenerFn)
   }
 
   $$digestOnce () {

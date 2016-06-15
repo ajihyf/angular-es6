@@ -658,6 +658,325 @@ describe('Scope', function () {
     })
   })
 
+  describe('#$watchCollection', function () {
+    it('works like a normal watch for non-colletions', function () {
+      scope.someValue = 233
+      let value
+      const listenerFn = sinon.spy((newValue, oldValue, scope) => { value = oldValue })
+
+      scope.$watchCollection(
+        scope => scope.someValue,
+        listenerFn
+      )
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledOnce
+      expect(value).to.equal(233)
+
+      scope.someValue = 256
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+    })
+
+    it('correctly handles NaNs', function () {
+      scope.someValue = 0 / 0
+      const listenerFn = sinon.spy()
+
+      scope.$watchCollection(
+        scope => scope.someValue,
+        listenerFn
+      )
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledOnce
+    })
+
+    it('notices when the value becomes an array', function () {
+      const listenerFn = sinon.spy()
+
+      scope.$watchCollection(
+        scope => scope.arr,
+        listenerFn
+      )
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledOnce
+
+      scope.arr = [0, 1]
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+    })
+
+    it('detects new items in an array', function () {
+      scope.arr = [0, 1, 2]
+      const listenerFn = sinon.spy()
+
+      scope.$watchCollection(
+        scope => scope.arr,
+        listenerFn
+      )
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledOnce
+
+      scope.arr.push(3)
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+    })
+
+    it('detects items removed in an array', function () {
+      scope.arr = [0, 1, 2]
+      const listenerFn = sinon.spy()
+
+      scope.$watchCollection(
+        scope => scope.arr,
+        listenerFn
+      )
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledOnce
+
+      scope.arr.shift()
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+    })
+
+    it('detects an item replaced in an array', function () {
+      scope.arr = [0, 1, 2]
+      const listenerFn = sinon.spy()
+
+      scope.$watchCollection(
+        scope => scope.arr,
+        listenerFn
+      )
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledOnce
+
+      scope.arr[1] = 10
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+    })
+
+    it('detects items reordered in an array', function () {
+      scope.arr = [3, 1, 2]
+      const listenerFn = sinon.spy()
+
+      scope.$watchCollection(
+        scope => scope.arr,
+        listenerFn
+      )
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledOnce
+
+      scope.arr.sort()
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+    })
+
+    it('correctly handles NaNs in an array', function () {
+      scope.arr = [0, Number.NaN, 2, Number.NaN]
+      const listenerFn = sinon.spy()
+
+      scope.$watchCollection(
+        scope => scope.arr,
+        listenerFn
+      )
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledOnce
+    })
+
+    it('detects an item replaced in an argument object', function () {
+      (function () {
+        scope.arrLike = arguments
+      })(0, 1, 2)
+      const listenerFn = sinon.spy()
+
+      scope.$watchCollection(
+        scope => scope.arrLike,
+        listenerFn
+      )
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledOnce
+
+      scope.arrLike[1] = 233
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+    })
+
+    it('detects an item replaced in a NodeList object', function () {
+      document.documentElement.appendChild(document.createElement('div'))
+      scope.arrLike = document.getElementsByTagName('div')
+      const listenerFn = sinon.spy()
+
+      scope.$watchCollection(
+        scope => scope.arrLike,
+        listenerFn
+      )
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledOnce
+
+      document.documentElement.appendChild(document.createElement('div'))
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+    })
+
+    it('notices when the value becomes an object', function () {
+      const listenerFn = sinon.spy()
+
+      scope.$watchCollection(
+        scope => scope.obj,
+        listenerFn
+      )
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledOnce
+
+      scope.obj = { a: 1 }
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+    })
+
+    it('detects when an attribute is added to an object', function () {
+      scope.obj = { a: 1 }
+      const listenerFn = sinon.spy()
+
+      scope.$watchCollection(
+        scope => scope.obj,
+        listenerFn
+      )
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledOnce
+
+      scope.obj.b = 2
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+
+      scope.$digest()
+    })
+
+    it('detects when an attribute is changed in an object', function () {
+      scope.obj = { a: 1 }
+      const listenerFn = sinon.spy()
+
+      scope.$watchCollection(
+        scope => scope.obj,
+        listenerFn
+      )
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledOnce
+
+      scope.obj.a = 2
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+
+      scope.$digest()
+    })
+
+    it('detects when an attribute is deleted to an object', function () {
+      scope.obj = { a: 1 }
+      const listenerFn = sinon.spy()
+
+      scope.$watchCollection(
+        scope => scope.obj,
+        listenerFn
+      )
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledOnce
+
+      delete scope.obj.a
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+    })
+
+    it('correctly handles NaNs in an object', function () {
+      scope.obj = { a: Number.NaN }
+      const listenerFn = sinon.spy()
+
+      scope.$watchCollection(
+        scope => scope.obj,
+        listenerFn
+      )
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledOnce
+    })
+
+    it('does not consider object with length property as an array', function () {
+      scope.obj = { length: 233, someKey: 1 }
+      const listenerFn = sinon.spy()
+
+      scope.$watchCollection(
+        scope => scope.obj,
+        listenerFn
+      )
+
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledOnce
+
+      scope.obj.otherKey = 256
+      scope.$digest()
+      expect(listenerFn).to.have.been.calledTwice
+    })
+
+    it('get newValue and oldValue in listenerFn', function () {
+      scope.arr = [0, 1, 2]
+      let gotNewValue
+      let gotOldValue
+
+      scope.$watchCollection(
+        scope => scope.arr,
+        (newValue, oldValue) => {
+          gotNewValue = newValue
+          gotOldValue = oldValue
+        }
+      )
+
+      scope.$digest()
+      expect(gotNewValue).to.deep.equal([0, 1, 2])
+      expect(gotOldValue).to.deep.equal([0, 1, 2])
+
+      scope.arr.push(3)
+      scope.$digest()
+      expect(gotNewValue).to.deep.equal([0, 1, 2, 3])
+      expect(gotOldValue).to.deep.equal([0, 1, 2])
+    })
+  })
+
   describe('errorHandling', function () {
     it('catches exceptions in watch functions', function () {
       scope.someValue = 233
