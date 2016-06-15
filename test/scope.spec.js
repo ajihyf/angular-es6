@@ -977,6 +977,284 @@ describe('Scope', function () {
     })
   })
 
+  describe('Events', function () {
+    let child, isolatedChild
+
+    beforeEach(() => {
+      child = scope.$new()
+      isolatedChild = scope.$new(true)
+    })
+
+    it('allows registering listeners', function () {
+      const listener1 = () => {}
+      const listener2 = () => {}
+      const listener3 = () => {}
+
+      scope.$on('aEvent', listener1)
+      scope.$on('aEvent', listener2)
+      scope.$on('bEvent', listener3)
+
+      expect(scope.$$listeners).to.deep.equal({
+        aEvent: [listener1, listener2],
+        bEvent: [listener3]
+      })
+    })
+
+    it('registers different listeners for every scope', function () {
+      const listener1 = () => {}
+      const listener2 = () => {}
+      const listener3 = () => {}
+
+      scope.$on('aEvent', listener1)
+      child.$on('aEvent', listener2)
+      isolatedChild.$on('aEvent', listener3)
+
+      expect(scope.$$listeners).to.deep.equal({ aEvent: [listener1] })
+      expect(child.$$listeners).to.deep.equal({ aEvent: [listener2] })
+      expect(isolatedChild.$$listeners).to.deep.equal({ aEvent: [listener3] })
+    })
+
+    _.each(['$emit', '$broadcast'], method => {
+      it(`calls the listeners of the matching event on ${method}`, function () {
+        const listener1 = sinon.spy()
+        const listener2 = sinon.spy()
+        const listener3 = sinon.spy()
+
+        scope.$on('aEvent', listener1)
+        scope.$on('aEvent', listener2)
+        scope.$on('bEvent', listener3)
+
+        scope[method]('aEvent')
+        expect(listener1).to.have.been.calledOnce
+        expect(listener2).to.have.been.calledOnce
+        expect(listener3).to.have.not.been.called
+      })
+
+      it(`passes an event object with a name to listener on ${method}`, function () {
+        const listener = sinon.spy()
+        scope.$on('aEvent', listener)
+
+        scope[method]('aEvent')
+        expect(listener).to.have.been.calledOnce
+        expect(listener.lastCall.args[0].name).to.equal('aEvent')
+      })
+
+      it(`passes the same event object to each listener on ${method}`, function () {
+        const listener1 = sinon.spy()
+        const listener2 = sinon.spy()
+
+        scope.$on('aEvent', listener1)
+        scope.$on('aEvent', listener2)
+
+        scope[method]('aEvent')
+        expect(listener1.lastCall.args[0]).to.equal(listener2.lastCall.args[0])
+      })
+
+      it(`passes additional arguments to listeners on ${method}`, function () {
+        const listener = sinon.spy()
+        scope.$on('aEvent', listener)
+
+        scope[method]('aEvent', 'some', ['additional', 'arguments'], '...')
+
+        expect(listener.lastCall.args[1]).to.deep.equal('some')
+        expect(listener.lastCall.args[2]).to.deep.equal(['additional', 'arguments'])
+        expect(listener.lastCall.args[3]).to.deep.equal('...')
+      })
+
+      it(`returns the event object on ${method}`, function () {
+        const returnedEvent = scope[method]('aEvent')
+
+        expect(returnedEvent).to.be.an('object').and.have.property('name', 'aEvent')
+      })
+
+      it(`can be deregistered ${method}`, function () {
+        const listener = sinon.spy()
+        const deregister = scope.$on('aEvent', listener)
+
+        deregister()
+        scope[method]('aEvent')
+
+        expect(listener).have.not.been.called
+      })
+
+      it(`does not skip the next listener when removed on ${method}`, function () {
+        const listener = () => {
+          deregister()
+        }
+        const nextListener = sinon.spy()
+        const deregister = scope.$on('aEvent', listener)
+        scope.$on('aEvent', nextListener)
+
+        scope[method]('aEvent')
+        expect(nextListener).to.have.been.calledOnce
+      })
+
+      it(`sets defaultPrevented when preventDefault called on ${method}`, function () {
+        scope.$on('aEvent', event => { event.preventDefault() })
+
+        const event = scope[method]('aEvent')
+
+        expect(event).to.have.property('defaultPrevented', true)
+      })
+
+      it(`does not stop on exceptions on ${method}`, function () {
+        const listener = sinon.spy()
+        scope.$on('aEvent', () => { throw new Error('error') })
+        scope.$on('aEvent', listener)
+
+        scope[method]('aEvent')
+        expect(listener).to.have.been.calledOnce
+      })
+    })
+
+    it('propagates up the scope hierarchy on $emit', function () {
+      const scopeListener = sinon.spy()
+      const childListener = sinon.spy()
+
+      scope.$on('aEvent', scopeListener)
+      child.$on('aEvent', childListener)
+
+      child.$emit('aEvent')
+      expect(scopeListener).to.have.been.calledOnce
+      expect(childListener).to.have.been.calledOnce
+    })
+
+    it('propagates the same event up on $emit', function () {
+      const scopeListener = sinon.spy()
+      const childListener = sinon.spy()
+
+      scope.$on('aEvent', scopeListener)
+      child.$on('aEvent', childListener)
+
+      child.$emit('aEvent')
+      expect(scopeListener.lastCall.args[0]).to.equal(childListener.lastCall.args[0])
+    })
+
+    it('propagates down the scope hierarchy on $broadcast', function () {
+      const scopeListener = sinon.spy()
+      const childListener = sinon.spy()
+      const isolatedChildListener = sinon.spy()
+
+      scope.$on('aEvent', scopeListener)
+      child.$on('aEvent', childListener)
+      isolatedChild.$on('aEvent', isolatedChildListener)
+
+      scope.$broadcast('aEvent')
+      expect(scopeListener).to.have.been.calledOnce
+      expect(childListener).to.have.been.calledOnce
+      expect(isolatedChildListener).to.have.been.calledOnce
+    })
+
+    it('propagates the same event down on $broadcast', function () {
+      const scopeListener = sinon.spy()
+      const childListener = sinon.spy()
+      const isolatedChildListener = sinon.spy()
+
+      scope.$on('aEvent', scopeListener)
+      child.$on('aEvent', childListener)
+      isolatedChild.$on('aEvent', isolatedChildListener)
+
+      scope.$broadcast('aEvent')
+      expect(scopeListener.lastCall.args[0]).to.equal(childListener.lastCall.args[0])
+      expect(scopeListener.lastCall.args[0]).to.equal(isolatedChildListener.lastCall.args[0])
+    })
+
+    it('attaches targetScope on $emit', function () {
+      const scopeListener = sinon.spy()
+      const childListener = sinon.spy()
+
+      scope.$on('aEvent', scopeListener)
+      child.$on('aEvent', childListener)
+
+      child.$emit('aEvent')
+      expect(scopeListener.lastCall.args[0]).to.have.property('targetScope', child)
+      expect(childListener.lastCall.args[0]).to.have.property('targetScope', child)
+    })
+
+    it('attaches targetScope on $broadcast', function () {
+      const scopeListener = sinon.spy()
+      const childListener = sinon.spy()
+
+      scope.$on('aEvent', scopeListener)
+      child.$on('aEvent', childListener)
+
+      scope.$broadcast('aEvent')
+      expect(scopeListener.lastCall.args[0]).to.have.property('targetScope', scope)
+      expect(childListener.lastCall.args[0]).to.have.property('targetScope', scope)
+    })
+
+    it('attaches currentScope on $emit', function () {
+      let currentScopeOnScope
+      let currentScopeOnChild
+      scope.$on('aEvent', (event) => { currentScopeOnScope = event.currentScope })
+      child.$on('aEvent', (event) => { currentScopeOnChild = event.currentScope })
+
+      child.$emit('aEvent')
+      expect(currentScopeOnChild).to.equal(child)
+      expect(currentScopeOnScope).to.equal(scope)
+    })
+
+    it('attaches currentScope on $broadcast', function () {
+      let currentScopeOnScope
+      let currentScopeOnChild
+      scope.$on('aEvent', event => { currentScopeOnScope = event.currentScope })
+      child.$on('aEvent', event => { currentScopeOnChild = event.currentScope })
+
+      scope.$broadcast('aEvent')
+      expect(currentScopeOnChild).to.equal(child)
+      expect(currentScopeOnScope).to.equal(scope)
+    })
+
+    it('sets currentScope to null after propagation on $emit', function () {
+      scope.$on('aEvent', () => {})
+
+      const event = scope.$emit('aEvent')
+      expect(event.currentScope).to.be.null
+    })
+
+    it('sets currentScope to null after propagation on $broadcast', function () {
+      scope.$on('aEvent', () => {})
+
+      const event = scope.$broadcast('aEvent')
+      expect(event.currentScope).to.be.null
+    })
+
+    it('does not propagate to parents when stopped', function () {
+      const scopeListener = sinon.spy()
+
+      child.$on('aEvent', event => { event.stopPropagation() })
+      scope.$on('aEvent', scopeListener)
+
+      child.$emit('aEvent')
+      expect(scopeListener).to.have.not.been.called
+    })
+
+    it('fires $destroy when destroyed', function () {
+      const listener = sinon.spy()
+      scope.$on('$destroy', listener)
+
+      scope.$destroy()
+      expect(listener).to.have.been.calledOnce
+    })
+
+    it('broadcast $destroy to children when destroyed', function () {
+      const listener = sinon.spy()
+      child.$on('$destroy', listener)
+
+      scope.$destroy()
+      expect(listener).to.have.been.calledOnce
+    })
+
+    it('does not call listeners after destroyed', function () {
+      const listener = sinon.spy()
+      scope.$on('aEvent', listener)
+
+      scope.$destroy()
+      scope.$emit('aEvent')
+      expect(listener).to.have.not.been.called
+    })
+  })
+
   describe('errorHandling', function () {
     it('catches exceptions in watch functions', function () {
       scope.someValue = 233

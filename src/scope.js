@@ -33,6 +33,79 @@ class Scope {
   $$children = []
   $root = this
   $parent = null
+  $$listeners = {}
+
+  $on (eventName, listener) {
+    let listeners = this.$$listeners[eventName]
+    if (!listeners) {
+      this.$$listeners[eventName] = listeners = []
+    }
+    listeners.push(listener)
+    return () => {
+      const index = listeners.indexOf(listener)
+      if (index >= 0) {
+        listeners[index] = null
+      }
+    }
+  }
+
+  $emit (eventName, ...args) {
+    let propagationStopped = false
+    const event = {
+      name: eventName,
+      targetScope: this,
+      stopPropagation: () => {
+        propagationStopped = true
+      },
+      preventDefault: () => {
+        event.defaultPrevented = true
+      }
+    }
+    const listenerArgs = [event, ...args]
+    let scope = this
+    do {
+      event.currentScope = scope
+      scope.$$fireEventOnScope(eventName, listenerArgs)
+      scope = scope.$parent
+    } while (scope && !propagationStopped) // eslint-disable-line no-unmodified-loop-condition
+    event.currentScope = null
+    return event
+  }
+
+  $broadcast (eventName, ...args) {
+    const event = {
+      name: eventName,
+      targetScope: this,
+      preventDefault: () => {
+        event.defaultPrevented = true
+      }
+    }
+    const listenerArgs = [event, ...args]
+    this.$$everyScope(scope => {
+      event.currentScope = scope
+      scope.$$fireEventOnScope(eventName, listenerArgs)
+      return true
+    })
+    event.currentScope = null
+    return event
+  }
+
+  $$fireEventOnScope (eventName, listenerArgs) {
+    const listeners = this.$$listeners[eventName] || []
+    let i = 0
+    while (i < listeners.length) {
+      if (listeners[i] === null) {
+        listeners.splice(i, 1)
+      } else {
+        try {
+          listeners[i].apply(null, listenerArgs)
+        } catch (err) {
+          console.error(err)
+        }
+        i++
+      }
+    }
+  }
 
   $$postDigest (fn) {
     this.$$postDigestQueue.push(fn)
@@ -334,6 +407,7 @@ class Scope {
     parent.$$children.push(child)
     child.$$watchers = []
     child.$$children = []
+    child.$$listeners = {}
     child.$parent = parent
     return child
   }
@@ -347,6 +421,7 @@ class Scope {
   }
 
   $destroy () {
+    this.$broadcast('$destroy')
     if (this.$parent) {
       const siblings = this.$parent.$$children
       const index = siblings.indexOf(this)
@@ -355,6 +430,7 @@ class Scope {
       }
     }
     this.$$watchers = null
+    this.$$listeners = {}
   }
 }
 
