@@ -4,6 +4,26 @@ import { expect } from 'chai';
 import _ from 'lodash';
 
 describe('Parse', function () {
+  it('will parse null', function () {
+    const fn = parse('null');
+    expect(fn()).to.be.null;
+  });
+
+  it('will parse true', function () {
+    const fn = parse('true');
+    expect(fn()).to.be.true;
+  });
+
+  it('will parse false', function () {
+    const fn = parse('false');
+    expect(fn()).to.be.false;
+  });
+
+  it('ignores whitespaces', function () {
+    const fn = parse(' \r\t\v\u00A0\n233');
+    expect(fn()).to.equal(233);
+  });
+
   describe('number', function () {
     it('can parse an integer', function () {
       const fn = parse('233');
@@ -87,26 +107,6 @@ describe('Parse', function () {
     });
   });
 
-  it('will parse null', function () {
-    const fn = parse('null');
-    expect(fn()).to.be.null;
-  });
-
-  it('will parse true', function () {
-    const fn = parse('true');
-    expect(fn()).to.be.true;
-  });
-
-  it('will parse false', function () {
-    const fn = parse('false');
-    expect(fn()).to.be.false;
-  });
-
-  it('ignores whitespaces', function () {
-    const fn = parse(' \r\t\v\u00A0\n233');
-    expect(fn()).to.equal(233);
-  });
-
   describe('array', function () {
     it('will parse an empty array', function () {
       const fn = parse('[]');
@@ -141,7 +141,7 @@ describe('Parse', function () {
     });
   });
 
-  describe('access properties', function () {
+  describe('Member Access', function () {
     it('looks up an attribute from the scope', function () {
       const fn = parse('aKey');
       expect(fn({ aKey: 233 })).to.equal(233);
@@ -305,6 +305,101 @@ describe('Parse', function () {
         }
       };
       expect(fn(scope, locals)).to.equal(locals);
+    });
+  });
+
+  describe('Assign Values', function () {
+    it('parses a simple attribute assignment', function () {
+      const fn = parse('a = 233');
+      const scope = {};
+      fn(scope);
+      expect(scope).to.have.property('a', 233);
+    });
+
+    it('can assign any primary expression', function () {
+      const fn = parse('a = fn()');
+      const scope = { fn: _.constant(233) };
+      fn(scope);
+      expect(scope).to.have.property('a', 233);
+    });
+
+    it('can assign a computed object property', function () {
+      const fn = parse('obj["a"] = 233');
+      const scope = { obj: {} };
+      fn(scope);
+      expect(scope.obj).to.have.property('a', 233);
+    });
+
+    it('can assign a non-computed object property', function () {
+      const fn = parse('obj.a = 233');
+      const scope = { obj: {} };
+      fn(scope);
+      expect(scope.obj).to.have.property('a', 233);
+    });
+
+    it('can assign a nested object property', function () {
+      const fn = parse('arr[0].a = 233');
+      const scope = { arr: [{}] };
+      fn(scope);
+      expect(scope.arr[0]).to.have.property('a', 233);
+    });
+
+    it('creates the objects in the assignment on the fly', function () {
+      const fn = parse('a["b"].c.d = 233');
+      const scope = {};
+      fn(scope);
+      expect(scope).to.have.deep.property('a.b.c.d', 233);
+    });
+  });
+
+  describe('Safety in Member Access', function () {
+    it('does not allow calling the function constructor ias computed property', function () {
+      expect(() => {
+        const fn = parse('fn["constructor"]("return window;")()');
+        fn({ fn: () => {} });
+      }).to.throw();
+    });
+
+    it('does not allow calling the function constructor', function () {
+      expect(() => {
+        const fn = parse('fn.constructor("return window;")()');
+        fn({ fn: () => {} });
+      }).to.throw();
+    });
+
+    it('does not allow access __proto__', function () {
+      expect(() => {
+        const fn = parse('obj.__proto__');
+        fn({ obj: {} });
+      }).to.throw();
+    });
+
+    it('does not allow calling __defineGetter__', function () {
+      expect(() => {
+        const fn = parse('obj.__defineGetter__("a", fn)');
+        fn({ obj: {}, fn: () => {} });
+      }).to.throw();
+    });
+
+    it('does not allow calling __defineSetter__', function () {
+      expect(() => {
+        const fn = parse('obj.__defineSetter__("a", fn)');
+        fn({ obj: {}, fn: () => {} });
+      }).to.throw();
+    });
+
+    it('does not allow calling __lookupGetter__', function () {
+      expect(() => {
+        const fn = parse('obj.__lookupGetter__("a")');
+        fn({ obj: {} });
+      }).to.throw();
+    });
+
+    it('does not allow calling __lookupSetter__', function () {
+      expect(() => {
+        const fn = parse('obj.__lookupSetter__("a")');
+        fn({ obj: {} });
+      }).to.throw();
     });
   });
 });

@@ -20,7 +20,7 @@ function isWhiteSpace(ch: ?string) {
     ch === '\n' || ch === '\v' || ch === '\u00A0';
 }
 
-const ESCAPE_MAP: { [key: string]: string } = {
+const ESCAPE_MAP = {
   'n': '\n',
   'f': '\f',
   'r': '\r',
@@ -155,7 +155,7 @@ class Lexer {
         this.readNumber();
       } else if (this.ch != null && this.chIsIn('\'"')) {
         this.readString(this.ch);
-      } else if (this.ch != null && this.chIsIn('[],{}:.()')) {
+      } else if (this.ch != null && this.chIsIn('[],{}:.()=')) {
         this.tokens.push({
           text: this.ch
         });
@@ -193,7 +193,8 @@ type ASTNode = ASTProgramNode
   | ASTIdentifierNode
   | ASTThisExpressionNode
   | ASTMemberExpressionNode
-  | ASTCallExpressionNode;
+  | ASTCallExpressionNode
+  | ASTAssignmentExpressionNode;
 
 type ASTProgramNode = {
   type: 'Program',
@@ -248,6 +249,12 @@ type ASTCallExpressionNode = {
   arguments: ASTNode[]
 };
 
+type ASTAssignmentExpressionNode = {
+  type: 'AssignmentExpression',
+  left: ASTNode,
+  right: ASTNode
+};
+
 const ASTNodeType = {
   Program: 'Program',
   Literal: 'Literal',
@@ -257,7 +264,8 @@ const ASTNodeType = {
   Identifier: 'Identifier',
   ThisExpression: 'ThisExpression',
   MemberExpression: 'MemberExpression',
-  CallExpression: 'CallExpression'
+  CallExpression: 'CallExpression',
+  AssignmentExpression: 'AssignmentExpression'
 };
 
 const LanguageConstants: { [key: string]: (ASTThisExpressionNode | ASTLiteralNode) } = {
@@ -281,7 +289,7 @@ class AST {
   }
 
   program(): ASTProgramNode {
-    return { type: ASTNodeType.Program, body: this.primary() };
+    return { type: ASTNodeType.Program, body: this.assignment() };
   }
 
   computedMemberExpression(object: ASTNode): ASTMemberExpressionNode {
@@ -312,11 +320,23 @@ class AST {
     };
     if (!this.peek(')')) {
       do {
-        callExpression.arguments.push(this.primary());
+        callExpression.arguments.push(this.assignment());
       } while (this.expect(','));
     }
     this.consume(')');
     return callExpression;
+  }
+
+  assignment(): ASTNode {
+    const left = this.primary();
+    if (this.expect('=')) {
+      const right = this.primary();
+      return {
+        type: ASTNodeType.AssignmentExpression,
+        left, right
+      };
+    }
+    return left;
   }
 
   primary(): ASTNode {
@@ -382,7 +402,7 @@ class AST {
         }
         const key = peek.identifier ? this.identifier() : this.constant();
         this.consume(':');
-        const value = this.primary();
+        const value = this.assignment();
         properties.push({
           type: ASTNodeType.Property,
           key,
@@ -401,7 +421,7 @@ class AST {
         if (this.peek(']')) {
           break;
         }
-        elements.push(this.primary());
+        elements.push(this.assignment());
       } while (this.expect(','));
     }
     this.consume(']');
@@ -414,6 +434,13 @@ class AST {
 
   identifier(): ASTIdentifierNode {
     return { type: ASTNodeType.Identifier, name: this.consume().text };
+  }
+}
+
+function ensureSafeMemberName(name: string) {
+  if (_.includes(['constructor', '__proto__', '__defineGetter__',
+    '__defineSetter__', '__lookupGetter__', '__lookupSetter__'], name)) {
+    throw new Error('Attempting to access a disallowed field');
   }
 }
 
@@ -437,15 +464,22 @@ class ASTCompiler {
     this.astBuilder = astBuilder;
   }
 
-  compile(text): Function {
+  compile(text: string): (s: any, l: any) => any {
     const ast: ASTNode = this.astBuilder.ast(text);
     this.state = { body: [], nextId: 0, vars: [] };
     this.recurse(ast);
+    // s means scope, l means locals
+    const fnString = `
+    var fn = function(s, l) {
+      ${this.state.vars.length ? `var ${this.state.vars.join(',')};` : ''}
+      ${this.state.body.join('')}
+    }
+    return fn;
+    `;
     /* eslint-disable no-new-func */
-    return new Function('s', 'l', // s means scope, l means locals
-      (this.state.vars.length ? `var ${this.state.vars.join(',')};` : '') +
-      this.state.body.join(''));
+    const fn = new Function('ensureSafeMemberName', fnString)(ensureSafeMemberName);
     /* eslint-enable no-new-func */
+    return (fn: any);
   }
 
   nextId(): string {
@@ -454,7 +488,7 @@ class ASTCompiler {
     return id;
   }
 
-  recurse(ast: ASTNode, inContext?: CallContext): any {
+  recurse(ast: ASTNode, inContext?: CallContext, create?: boolean): any {
     let varId: string;
     switch (ast.type) {
       case ASTNodeType.Literal:
@@ -474,10 +508,17 @@ class ASTCompiler {
         });
         return `{${properties.join(',')}}`;
       case ASTNodeType.Identifier:
+        ensureSafeMemberName(ast.name);
         varId = this.nextId();
         this.if_(
           ASTCompiler.getHasOwnProperty('l', ast.name),
           ASTCompiler.assign(varId, ASTCompiler.nonComputedMember('l', ast.name)));
+        if (create) {
+          this.if_(
+            `${ASTCompiler.not(ASTCompiler.getHasOwnProperty('l', ast.name))}
+            && s && ${ASTCompiler.not(ASTCompiler.getHasOwnProperty('s', ast.name))}`,
+            ASTCompiler.assign(ASTCompiler.nonComputedMember('s', ast.name), '{}'));
+        }
         this.if_(
           `${ASTCompiler.not(ASTCompiler.getHasOwnProperty('l', ast.name))} && s`,
           ASTCompiler.assign(varId, ASTCompiler.nonComputedMember('s', ast.name)));
@@ -491,12 +532,19 @@ class ASTCompiler {
         return 's';
       case ASTNodeType.MemberExpression:
         varId = this.nextId();
-        const left = this.recurse(ast.object);
+        const left = this.recurse(ast.object, undefined, create);
         if (inContext) {
           inContext.context = left;
         }
         if (ast.computed) {
           const right = this.recurse(ast.property);
+          this.addEnsureSafeMemberName(right);
+          if (create) {
+            const computedMember = ASTCompiler.computedMember(left, right);
+            this.if_(
+              ASTCompiler.not(computedMember),
+              ASTCompiler.assign(computedMember, '{}'));
+          }
           this.if_(left,
             ASTCompiler.assign(varId,
               ASTCompiler.computedMember(left, right)));
@@ -505,6 +553,13 @@ class ASTCompiler {
             inContext.name = right;
           }
         } else {
+          ensureSafeMemberName(ast.property.name);
+          if (create) {
+            const nonComputedMember = ASTCompiler.nonComputedMember(left, ast.property.name);
+            this.if_(
+              ASTCompiler.not(nonComputedMember),
+              ASTCompiler.assign(nonComputedMember, '{}'));
+          }
           this.if_(left,
             ASTCompiler.assign(varId,
               ASTCompiler.nonComputedMember(left, ast.property.name)));
@@ -526,9 +581,28 @@ class ASTCompiler {
           }
         }
         return `${callee} && ${callee}(${args.join(',')})`;
+      case ASTNodeType.AssignmentExpression:
+        const leftContext: CallContext = {};
+        this.recurse(ast.left, leftContext, true);
+        let leftExpr: ?string;
+        if (leftContext.context && leftContext.name) {
+          if (leftContext.computed) {
+            leftExpr = ASTCompiler.computedMember(leftContext.context, leftContext.name);
+          } else {
+            leftExpr = ASTCompiler.nonComputedMember(leftContext.context, leftContext.name);
+          }
+        }
+        if (leftExpr == null) {
+          throw new Error(`Unable to get leftContext info: ${JSON.stringify(leftContext)}`);
+        }
+        return ASTCompiler.assign(leftExpr, this.recurse(ast.right));
       default:
         throw new Error('Unknown ASTNode type');
     }
+  }
+
+  addEnsureSafeMemberName(expr: string) {
+    this.state.body.push(`ensureSafeMemberName(${expr});`);
   }
 
   if_(test: any, consequent: string) {
