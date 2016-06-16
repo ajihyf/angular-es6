@@ -248,24 +248,26 @@ type ASTCallExpressionNode = {
   arguments: ASTNode[]
 };
 
+const ASTNodeType = {
+  Program: 'Program',
+  Literal: 'Literal',
+  ArrayExpression: 'ArrayExpression',
+  ObjectExpression: 'ObjectExpression',
+  Property: 'Property',
+  Identifier: 'Identifier',
+  ThisExpression: 'ThisExpression',
+  MemberExpression: 'MemberExpression',
+  CallExpression: 'CallExpression'
+};
+
+const LanguageConstants: { [key: string]: (ASTThisExpressionNode | ASTLiteralNode) } = {
+  'this': { type: ASTNodeType.ThisExpression },
+  'null': { type: ASTNodeType.Literal, value: null },
+  'true': { type: ASTNodeType.Literal, value: true },
+  'false': { type: ASTNodeType.Literal, value: false }
+};
+
 class AST {
-  static Program = 'Program';
-  static Literal = 'Literal';
-  static ArrayExpression = 'ArrayExpression';
-  static ObjectExpression = 'ObjectExpression';
-  static Property = 'Property';
-  static Identifier = 'Identifier';
-  static ThisExpression = 'ThisExpression';
-  static MemberExpression = 'MemberExpression';
-  static CallExpression = 'CallExpression';
-
-  static constants: { [key: string]: (ASTThisExpressionNode | ASTLiteralNode) } = {
-    'this': { type: 'ThisExpression' },
-    'null': { type: 'Literal', value: null },
-    'true': { type: 'Literal', value: true },
-    'false': { type: 'Literal', value: false } // $FLOWISSUE
-  };
-
   lexer: Lexer;
   tokens: LexToken[];
 
@@ -279,12 +281,12 @@ class AST {
   }
 
   program(): ASTProgramNode {
-    return { type: AST.Program, body: this.primary() };
+    return { type: ASTNodeType.Program, body: this.primary() };
   }
 
   computedMemberExpression(object: ASTNode): ASTMemberExpressionNode {
     const primary: ASTMemberExpressionNode = {
-      type: AST.MemberExpression,
+      type: ASTNodeType.MemberExpression,
       object,
       property: this.primary(),
       computed: true
@@ -295,7 +297,7 @@ class AST {
 
   nonComputedMemberExpression(object: ASTNode): ASTMemberExpressionNode {
     return {
-      type: AST.MemberExpression,
+      type: ASTNodeType.MemberExpression,
       object,
       property: this.identifier(),
       computed: false
@@ -304,7 +306,7 @@ class AST {
 
   callExpression(callee: ASTNode): ASTCallExpressionNode {
     const callExpression: ASTCallExpressionNode = {
-      type: AST.CallExpression,
+      type: ASTNodeType.CallExpression,
       callee,
       arguments: []
     };
@@ -323,8 +325,8 @@ class AST {
       primary = this.arrayDeclaration();
     } else if (this.expect('{')) {
       primary = this.object();
-    } else if (AST.constants.hasOwnProperty(this.tokens[0].text)) {
-      primary = AST.constants[this.consume().text];
+    } else if (LanguageConstants.hasOwnProperty(this.tokens[0].text)) {
+      primary = LanguageConstants[this.consume().text];
     } else {
       const peek = this.peek();
       if (peek && peek.identifier) {
@@ -382,14 +384,14 @@ class AST {
         this.consume(':');
         const value = this.primary();
         properties.push({
-          type: AST.Property,
+          type: ASTNodeType.Property,
           key,
           value
         });
       } while (this.expect(','));
     }
     this.consume('}');
-    return { type: AST.ObjectExpression, properties };
+    return { type: ASTNodeType.ObjectExpression, properties };
   }
 
   arrayDeclaration(): ASTArrayExpressionNode {
@@ -403,15 +405,15 @@ class AST {
       } while (this.expect(','));
     }
     this.consume(']');
-    return { type: AST.ArrayExpression, elements };
+    return { type: ASTNodeType.ArrayExpression, elements };
   }
 
   constant(): ASTLiteralNode {
-    return { type: AST.Literal, value: this.consume().value };
+    return { type: ASTNodeType.Literal, value: this.consume().value };
   }
 
   identifier(): ASTIdentifierNode {
-    return { type: AST.Identifier, name: this.consume().text };
+    return { type: ASTNodeType.Identifier, name: this.consume().text };
   }
 }
 
@@ -455,23 +457,23 @@ class ASTCompiler {
   recurse(ast: ASTNode, inContext?: CallContext): any {
     let varId: string;
     switch (ast.type) {
-      case AST.Literal:
+      case ASTNodeType.Literal:
         return escape(ast.value);
-      case AST.Program:
+      case ASTNodeType.Program:
         this.state.body.push(`return ${this.recurse(ast.body)};`);
         break;
-      case AST.ArrayExpression:
+      case ASTNodeType.ArrayExpression:
         const elements = _.map(ast.elements, element => this.recurse(element));
         return `[${elements.join(',')}]`;
-      case AST.ObjectExpression:
+      case ASTNodeType.ObjectExpression:
         const properties = _.map(ast.properties, property => {
-          const key = property.key.type === AST.Identifier
+          const key = property.key.type === ASTNodeType.Identifier
             ? property.key.name : escape(property.key.value);
           const value = this.recurse(property.value);
           return `${key}:${value}`;
         });
         return `{${properties.join(',')}}`;
-      case AST.Identifier:
+      case ASTNodeType.Identifier:
         varId = this.nextId();
         this.if_(
           ASTCompiler.getHasOwnProperty('l', ast.name),
@@ -485,9 +487,9 @@ class ASTCompiler {
           inContext.computed = false;
         }
         return varId;
-      case AST.ThisExpression:
+      case ASTNodeType.ThisExpression:
         return 's';
-      case AST.MemberExpression:
+      case ASTNodeType.MemberExpression:
         varId = this.nextId();
         const left = this.recurse(ast.object);
         if (inContext) {
@@ -512,7 +514,7 @@ class ASTCompiler {
           }
         }
         return varId;
-      case AST.CallExpression:
+      case ASTNodeType.CallExpression:
         const callContext: CallContext = {};
         let callee = this.recurse(ast.callee, callContext);
         const args = _.map(ast.arguments, arg => this.recurse(arg));
