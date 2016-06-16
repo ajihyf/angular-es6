@@ -155,7 +155,7 @@ class Lexer {
         this.readNumber();
       } else if (this.ch != null && this.chIsIn('\'"')) {
         this.readString(this.ch);
-      } else if (this.ch != null && this.chIsIn('[],{}:')) {
+      } else if (this.ch != null && this.chIsIn('[],{}:.()')) {
         this.tokens.push({
           text: this.ch
         });
@@ -190,7 +190,10 @@ type ASTNode = ASTProgramNode
   | ASTArrayExpressionNode
   | ASTObjectNode
   | ASTPropertyNode
-  | ASTIdentifierNode;
+  | ASTIdentifierNode
+  | ASTThisExpressionNode
+  | ASTMemberExpressionNode
+  | ASTCallExpressionNode;
 
 type ASTProgramNode = {
   type: 'Program',
@@ -223,6 +226,28 @@ type ASTIdentifierNode = {
   name: string
 };
 
+type ASTThisExpressionNode = {
+  type: 'ThisExpression'
+};
+
+type ASTMemberExpressionNode = {
+  type: 'MemberExpression',
+  object: ASTNode,
+  property: ASTNode,
+  computed: true
+} | {
+  type: 'MemberExpression',
+  object: ASTNode,
+  property: ASTIdentifierNode,
+  computed: false
+};
+
+type ASTCallExpressionNode = {
+  type: 'CallExpression',
+  callee: ASTNode,
+  arguments: ASTNode[]
+};
+
 class AST {
   static Program = 'Program';
   static Literal = 'Literal';
@@ -230,11 +255,15 @@ class AST {
   static ObjectExpression = 'ObjectExpression';
   static Property = 'Property';
   static Identifier = 'Identifier';
+  static ThisExpression = 'ThisExpression';
+  static MemberExpression = 'MemberExpression';
+  static CallExpression = 'CallExpression';
 
-  static constants: { [key: string]: ASTLiteralNode } = {
-    'null': { type: AST.Literal, value: null },
-    'true': { type: AST.Literal, value: true },
-    'false': { type: AST.Literal, value: false }
+  static constants: { [key: string]: (ASTThisExpressionNode | ASTLiteralNode) } = {
+    'this': { type: 'ThisExpression' },
+    'null': { type: 'Literal', value: null },
+    'true': { type: 'Literal', value: true },
+    'false': { type: 'Literal', value: false } // $FLOWISSUE
   };
 
   lexer: Lexer;
@@ -253,32 +282,83 @@ class AST {
     return { type: AST.Program, body: this.primary() };
   }
 
-  primary(): ASTNode {
-    if (this.expect('[')) {
-      return this.arrayDeclaration();
-    }
-    if (this.expect('{')) {
-      return this.object();
-    }
-    if (AST.constants.hasOwnProperty(this.tokens[0].text)) {
-      return AST.constants[this.consume().text];
-    }
-    return this.constant();
+  computedMemberExpression(object: ASTNode): ASTMemberExpressionNode {
+    const primary: ASTMemberExpressionNode = {
+      type: AST.MemberExpression,
+      object,
+      property: this.primary(),
+      computed: true
+    };
+    this.consume(']');
+    return primary;
   }
 
-  peek(e: ?string): ?LexToken {
+  nonComputedMemberExpression(object: ASTNode): ASTMemberExpressionNode {
+    return {
+      type: AST.MemberExpression,
+      object,
+      property: this.identifier(),
+      computed: false
+    };
+  }
+
+  callExpression(callee: ASTNode): ASTCallExpressionNode {
+    const callExpression: ASTCallExpressionNode = {
+      type: AST.CallExpression,
+      callee,
+      arguments: []
+    };
+    if (!this.peek(')')) {
+      do {
+        callExpression.arguments.push(this.primary());
+      } while (this.expect(','));
+    }
+    this.consume(')');
+    return callExpression;
+  }
+
+  primary(): ASTNode {
+    let primary: ASTNode;
+    if (this.expect('[')) {
+      primary = this.arrayDeclaration();
+    } else if (this.expect('{')) {
+      primary = this.object();
+    } else if (AST.constants.hasOwnProperty(this.tokens[0].text)) {
+      primary = AST.constants[this.consume().text];
+    } else {
+      const peek = this.peek();
+      if (peek && peek.identifier) {
+        primary = this.identifier();
+      } else {
+        primary = this.constant();
+      }
+    }
+    let next: ?LexToken;
+    while ((next = this.expect('.', '[', '('))) {
+      if (next.text === '[') {
+        primary = this.computedMemberExpression(primary);
+      } else if (next.text === '.') {
+        primary = this.nonComputedMemberExpression(primary);
+      } else if (next.text === '(') {
+        primary = this.callExpression(primary);
+      }
+    }
+    return primary;
+  }
+
+  peek(...expections: Array<?string>): ?LexToken {
     if (this.tokens.length > 0) {
-      if (this.tokens[0].text === e || !e) {
+      const text = this.tokens[0].text;
+      if (_.includes(expections, text) || _.every(expections, _.isNil)) {
         return this.tokens[0];
       }
     }
   }
 
-  expect(e: ?string): ?LexToken {
-    if (this.tokens.length > 0) {
-      if (this.tokens[0].text === e || !e) {
-        return this.tokens.shift();
-      }
+  expect(...expections: Array<?string>): ?LexToken {
+    const token = this.peek(...expections);
+    if (token) {
+      return this.tokens.shift();
     }
   }
 
@@ -336,7 +416,15 @@ class AST {
 }
 
 type ASTCompilerState = {
-  body: string[]
+  body: string[],
+  nextId: number,
+  vars: string[]
+};
+
+type CallContext = {
+  context?: any,
+  name?: any,
+  computed?: boolean
 };
 
 class ASTCompiler {
@@ -349,12 +437,23 @@ class ASTCompiler {
 
   compile(text): Function {
     const ast: ASTNode = this.astBuilder.ast(text);
-    this.state = { body: [] };
+    this.state = { body: [], nextId: 0, vars: [] };
     this.recurse(ast);
-    return new Function(this.state.body.join('')); // eslint-disable-line no-new-func
+    /* eslint-disable no-new-func */
+    return new Function('s', 'l', // s means scope, l means locals
+      (this.state.vars.length ? `var ${this.state.vars.join(',')};` : '') +
+      this.state.body.join(''));
+    /* eslint-enable no-new-func */
   }
 
-  recurse(ast: ASTNode): any {
+  nextId(): string {
+    const id = `$$vv${this.state.nextId++}`;
+    this.state.vars.push(id);
+    return id;
+  }
+
+  recurse(ast: ASTNode, inContext?: CallContext): any {
+    let varId: string;
     switch (ast.type) {
       case AST.Literal:
         return escape(ast.value);
@@ -372,9 +471,86 @@ class ASTCompiler {
           return `${key}:${value}`;
         });
         return `{${properties.join(',')}}`;
+      case AST.Identifier:
+        varId = this.nextId();
+        this.if_(
+          ASTCompiler.getHasOwnProperty('l', ast.name),
+          ASTCompiler.assign(varId, ASTCompiler.nonComputedMember('l', ast.name)));
+        this.if_(
+          `${ASTCompiler.not(ASTCompiler.getHasOwnProperty('l', ast.name))} && s`,
+          ASTCompiler.assign(varId, ASTCompiler.nonComputedMember('s', ast.name)));
+        if (inContext) {
+          inContext.context = `${ASTCompiler.getHasOwnProperty('l', ast.name)} ? l : s`;
+          inContext.name = ast.name;
+          inContext.computed = false;
+        }
+        return varId;
+      case AST.ThisExpression:
+        return 's';
+      case AST.MemberExpression:
+        varId = this.nextId();
+        const left = this.recurse(ast.object);
+        if (inContext) {
+          inContext.context = left;
+        }
+        if (ast.computed) {
+          const right = this.recurse(ast.property);
+          this.if_(left,
+            ASTCompiler.assign(varId,
+              ASTCompiler.computedMember(left, right)));
+          if (inContext) {
+            inContext.computed = true;
+            inContext.name = right;
+          }
+        } else {
+          this.if_(left,
+            ASTCompiler.assign(varId,
+              ASTCompiler.nonComputedMember(left, ast.property.name)));
+          if (inContext) {
+            inContext.computed = false;
+            inContext.name = ast.property.name;
+          }
+        }
+        return varId;
+      case AST.CallExpression:
+        const callContext: CallContext = {};
+        let callee = this.recurse(ast.callee, callContext);
+        const args = _.map(ast.arguments, arg => this.recurse(arg));
+        if (callContext.context && callContext.name) {
+          if (callContext.computed) {
+            callee = ASTCompiler.computedMember(callContext.context, callContext.name);
+          } else {
+            callee = ASTCompiler.nonComputedMember(callContext.context, callContext.name);
+          }
+        }
+        return `${callee} && ${callee}(${args.join(',')})`;
       default:
         throw new Error('Unknown ASTNode type');
     }
+  }
+
+  if_(test: any, consequent: string) {
+    this.state.body.push(`if(${test}){${consequent}}`);
+  }
+
+  static computedMember(left: string, right: string): string {
+    return `(${left})[${right}]`;
+  }
+
+  static nonComputedMember(left: string, right: string): string {
+    return `(${left}).${right}`;
+  }
+
+  static assign(name: string, value: string): string {
+    return `${name}=${value};`;
+  }
+
+  static not(name: string): string {
+    return `!(${name})`;
+  }
+
+  static getHasOwnProperty(object: string, property: string): string {
+    return `${object} && ${object}.hasOwnProperty(${escape(property)})`;
   }
 }
 

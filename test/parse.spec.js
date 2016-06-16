@@ -1,6 +1,7 @@
 /* eslint-env mocha */
 import parse from '../src/parse';
 import { expect } from 'chai';
+import _ from 'lodash';
 
 describe('Parse', function () {
   describe('number', function () {
@@ -137,6 +138,173 @@ describe('Parse', function () {
     it('will parse an object with identifier keys', function () {
       const fn = parse('{ a: 1, b: [0, 1], c: { d: 4 } }');
       expect(fn()).to.deep.equal({ a: 1, b: [0, 1], c: { d: 4 } });
+    });
+  });
+
+  describe('access properties', function () {
+    it('looks up an attribute from the scope', function () {
+      const fn = parse('aKey');
+      expect(fn({ aKey: 233 })).to.equal(233);
+      expect(fn({})).to.be.undefined;
+    });
+
+    it('returns undefined when looking up attribute from undefined', function () {
+      const fn = parse('aKey');
+      expect(fn()).to.be.undefined;
+    });
+
+    it('will parse this', function () {
+      const fn = parse('this');
+      const scope = {};
+      expect(fn()).to.be.undefined;
+      expect(fn(scope)).to.equal(scope);
+    });
+
+    it('looks up a 2-part identifier path from scope', function () {
+      const fn = parse('aKey.anotherKey');
+      expect(fn({ aKey: { anotherKey: 233 } })).to.equal(233);
+      expect(fn({ aKey: {} })).to.be.undefined;
+      expect(fn()).to.be.undefined;
+    });
+
+    it('looks up a member from object', function () {
+      const fn = parse('{ aKey: 233 }.aKey');
+      expect(fn()).to.equal(233);
+    });
+
+    it('looks up a 4-part identifier path from the scope', function () {
+      const fn = parse('aKey.bKey.cKey.dKey');
+      expect(fn({ aKey: { bKey: { cKey: { dKey: 233 } } } })).to.equal(233);
+      expect(fn({ aKey: { bKey: { cKey: {} } } })).to.be.undefined;
+      expect(fn({ aKey: { bKey: {} } })).to.be.undefined;
+      expect(fn({ aKey: {} })).to.be.undefined;
+      expect(fn()).to.be.undefined;
+    });
+
+    it('uses locals instead of scope when there is a matching key', function () {
+      const fn = parse('aKey');
+      const scope = { aKey: 233 };
+      const locals = { aKey: 256 };
+      expect(fn(scope, locals)).to.equal(256);
+    });
+
+    it('does not use locals instead of scope when no matching key', function () {
+      const fn = parse('aKey');
+      const scope = { aKey: 233 };
+      const locals = { bKey: 256 };
+      expect(fn(scope, locals)).to.equal(233);
+    });
+
+    it('uses locals instead of scope when the first part matches', function () {
+      const fn = parse('aKey.bKey');
+      const scope = { aKey: { bKey: 233 } };
+      const locals = { aKey: {} };
+      expect(fn(scope, locals)).to.be.undefined;
+    });
+
+    it('parses a simple computes property access', function () {
+      const fn = parse('aKey["bKey"]');
+      const scope = { aKey: { bKey: 233 } };
+      expect(fn(scope)).to.equal(233);
+    });
+
+    it('parses a computed numeric array access', function () {
+      const fn = parse('arr[1]');
+      const scope = { arr: [0, 1, 2] };
+      expect(fn(scope)).to.equal(1);
+    });
+
+    it('parses a computed access with another key as property', function () {
+      const fn = parse('aKey[innerKey]');
+      const scope = { aKey: { bKey: 233 }, innerKey: 'bKey' };
+      expect(fn(scope)).to.equal(233);
+    });
+
+    it('parses a computed access with another access as property', function () {
+      const fn = parse('aKey[bKey["innerKey"]]');
+      const scope = { aKey: { cKey: 233 }, bKey: { innerKey: 'cKey' } };
+      expect(fn(scope)).to.equal(233);
+    });
+  });
+
+  describe('Function Calls', function () {
+    it('parses a function call', function () {
+      const fn = parse('aFunction()');
+      const scope = { aFunction: () => 233 };
+      expect(fn(scope)).to.equal(233);
+    });
+
+    it('parses a function call with a single number argument', function () {
+      const fn = parse('aFunction(233)');
+      const scope = { aFunction: n => n };
+      expect(fn(scope)).to.equal(233);
+    });
+
+    it('parses a function call with a single identifier argument', function () {
+      const fn = parse('aFunction(n)');
+      const scope = { n: 233, aFunction: n => n };
+      expect(fn(scope)).to.equal(233);
+    });
+
+    it('parses a function call with a single function argument', function () {
+      const fn = parse('aFunction(getN())');
+      const scope = { getN: _.constant(233), aFunction: n => n };
+      expect(fn(scope)).to.equal(233);
+    });
+
+    it('parses a function with multiple arguments', function () {
+      const fn = parse('aFunction(15, n, getN())');
+      const scope = { n: 2, getN: _.constant(233), aFunction: (a, b, c) => (a + b + c) };
+      expect(fn(scope)).to.equal(250);
+    });
+  });
+
+  describe('Method Calls', function () {
+    it('calls methods accessed as computed properties', function () {
+      const fn = parse('a["fn"]()');
+      const scope = {
+        a: {
+          b: 233,
+          fn: function () {
+            return this.b;
+          }
+        }
+      };
+      expect(fn(scope)).to.equal(233);
+    });
+
+    it('calls methods accessed as non-computed properties', function () {
+      const fn = parse('a.fn()');
+      const scope = {
+        a: {
+          b: 233,
+          fn: function () {
+            return this.b;
+          }
+        }
+      };
+      expect(fn(scope)).to.equal(233);
+    });
+
+    it('binds bare functions to the scope', function () {
+      const fn = parse('fn()');
+      const scope = {
+        fn: function () {
+          return this;
+        }
+      };
+      expect(fn(scope)).to.equal(scope);
+    });
+
+    it('binds bare functions to the locals', function () {
+      const fn = parse('fn()');
+      const scope = {};
+      const locals = {
+        fn: function () {
+          return this;
+        }
+      };
+      expect(fn(scope, locals)).to.equal(locals);
     });
   });
 });

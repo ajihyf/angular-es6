@@ -1,12 +1,13 @@
 {
   "name": "angularjs-es6",
   "version": "0.1.0",
-  "description": "An ES6 implementation of angular.js, with babel and webpack. Forked from Build Your Own AngularJS@teropa",
+  "description": "An ES6 implementation of angular.js with babel, webpack and flow. Forked from Build Your Own AngularJS@teropa",
   "keywords": [
     "angularjs",
     "es6",
     "webpack",
-    "babel"
+    "babel",
+    "flow"
   ],
   "license": "MIT",
   "scripts": {
