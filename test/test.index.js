@@ -1,7 +1,7 @@
-import chai from 'chai'
-import sinonChai from 'sinon-chai'
+import chai from 'chai';
+import sinonChai from 'sinon-chai';
 
-chai.use(sinonChai)
+chai.use(sinonChai);
 
-const testsContext = require.context('.', true, /\.spec\.js$/)
-testsContext.keys().forEach(testsContext)
+const testsContext = require.context('.', true, /\.spec\.js$/);
+testsContext.keys().forEach(testsContext);

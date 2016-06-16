@@ -1,9 +1,15 @@
+const LodashModuleReplacementPlugin = require('lodash-webpack-plugin')
+const FlowStatusWebpackPlugin = require('flow-status-webpack-plugin');
+
 module.exports = function (config) {
   config.set({
     basePath: '.',
     autoWatch: false,
     frameworks: ['mocha'],
     colors: true,
+    client: {
+      captureConsole: false
+    },
     files: [
       'node_modules/babel-polyfill/dist/polyfill.js',
       {
@@ -28,9 +34,17 @@ module.exports = function (config) {
     logLevel: config.LOG_INFO,
     port: 9876,
     reporters: ['mocha'],
+    // reporter options
+    mochaReporter: {
+      output: 'autowatch'
+    },
     singleRun: false,
     webpack: {
       devtool: 'inline-source-map',
+      plugins: [
+        new LodashModuleReplacementPlugin(),
+        new FlowStatusWebpackPlugin()
+      ],
       module: {
         loaders: [
           {
@@ -53,5 +67,5 @@ module.exports = function (config) {
     webpackServer: {
       noInfo: true
     }
-  })
-}
+  });
+};

@@ -1,437 +1,463 @@
-import _ from 'lodash'
+/* @flow */
+import _ from 'lodash';
 
-const initWatchVal = () => {}
-const maxTTL = 10 // time to live
-
-function areEqual (newValue, oldValue, valueEq) {
+function areEqual(newValue: any, oldValue: any, valueEq: boolean) {
   if (valueEq) {
-    return _.isEqual(newValue, oldValue)
+    return _.isEqual(newValue, oldValue);
   } else {
     return (newValue === oldValue) ||
-      (_.isNaN(newValue) && _.isNaN(oldValue))
+      (_.isNaN(newValue) && _.isNaN(oldValue));
   }
 }
 
-function strictIsArrayLike (obj) {
-  const isArrayLike = _.isArrayLike(obj)
+function strictIsArrayLike(obj) {
+  const isArrayLike = _.isArrayLike(obj);
   if (isArrayLike) {
     if (obj.length > 0) {
-      return obj.hasOwnProperty(obj.length - 1)
+      return obj.hasOwnProperty(obj.length - 1);
     }
   }
-  return isArrayLike
+  return isArrayLike;
 }
 
-class Scope {
-  $$watchers = []
-  $$lastDirtyWatch = null
-  $$asyncQueue = []
-  $$applyAsyncQueue = []
-  $$applyAsyncId = null
-  $$phase = null
-  $$postDigestQueue = []
-  $$children = []
-  $root = this
-  $parent = null
-  $$listeners = {}
+type ListenerFunction<T> = (newValue?: T, oldValue?: T, scope?: Scope) => any;
+type Watcher = {
+  watchFn: CallWith<Scope, any>,
+  listenerFn: ListenerFunction<any>,
+  valueEq: boolean,
+  last: any
+};
+type AsyncQueueItem = {
+  scope: Scope,
+  expression: CallWith<Scope, any>
+};
+type Event = {
+  name: string,
+  defaultPrevented: boolean,
+  preventDefault: AnyFunction,
+  stopPropagation?: AnyFunction,
+  currentScope: ?Scope,
+  targetScope: Scope
+};
+type EventListener = (event: Event, ...rest: any[]) => any;
 
-  $on (eventName, listener) {
-    let listeners = this.$$listeners[eventName]
+const initWatchVal: AnyFunction = () => {};
+const maxTTL: number = 10; // time to live
+
+class Scope {
+  $$watchers: Watcher[] = [];
+  $$lastDirtyWatch: ?Watcher = null;
+  $$asyncQueue: AsyncQueueItem[] = [];
+  $$applyAsyncQueue: AnyFunction[] = [];
+  $$applyAsyncId: ?number = null;
+  $$phase: ?string = null;
+  $$postDigestQueue: AnyFunction[] = [];
+  $$children: Scope[] = [];
+  $root: Scope = this;
+  $parent: ?Scope = null;
+  $$listeners: { [key: string]: (?EventListener)[] } = {};
+
+  $on(eventName: string, listener: EventListener): AnyFunction {
+    let listeners = this.$$listeners[eventName];
     if (!listeners) {
-      this.$$listeners[eventName] = listeners = []
+      this.$$listeners[eventName] = listeners = [];
     }
-    listeners.push(listener)
+    listeners.push(listener);
     return () => {
-      const index = listeners.indexOf(listener)
+      const index = listeners.indexOf(listener);
       if (index >= 0) {
-        listeners[index] = null
+        listeners[index] = null;
       }
-    }
+    };
   }
 
-  $emit (eventName, ...args) {
-    let propagationStopped = false
-    const event = {
+  $emit(eventName: string, ...args: any[]): Event {
+    let propagationStopped = false;
+    const event: Event = {
       name: eventName,
       targetScope: this,
+      currentScope: this,
+      defaultPrevented: false,
       stopPropagation: () => {
-        propagationStopped = true
+        propagationStopped = true;
       },
       preventDefault: () => {
-        event.defaultPrevented = true
+        event.defaultPrevented = true;
       }
-    }
-    const listenerArgs = [event, ...args]
-    let scope = this
+    };
+    let scope = this;
     do {
-      event.currentScope = scope
-      scope.$$fireEventOnScope(eventName, listenerArgs)
-      scope = scope.$parent
-    } while (scope && !propagationStopped) // eslint-disable-line no-unmodified-loop-condition
-    event.currentScope = null
-    return event
+      event.currentScope = scope;
+      scope.$$fireEventOnScope(eventName, event, args);
+      scope = scope.$parent;
+    } while (scope && !propagationStopped); // eslint-disable-line no-unmodified-loop-condition
+    event.currentScope = null;
+    return event;
   }
 
-  $broadcast (eventName, ...args) {
-    const event = {
+  $broadcast(eventName: string, ...args: any[]): Event {
+    const event: Event = {
       name: eventName,
       targetScope: this,
+      currentScope: this,
+      defaultPrevented: false,
       preventDefault: () => {
-        event.defaultPrevented = true
+        event.defaultPrevented = true;
       }
-    }
-    const listenerArgs = [event, ...args]
+    };
     this.$$everyScope(scope => {
-      event.currentScope = scope
-      scope.$$fireEventOnScope(eventName, listenerArgs)
-      return true
-    })
-    event.currentScope = null
-    return event
+      event.currentScope = scope;
+      scope.$$fireEventOnScope(eventName, event, args);
+      return true;
+    });
+    event.currentScope = null;
+    return event;
   }
 
-  $$fireEventOnScope (eventName, listenerArgs) {
-    const listeners = this.$$listeners[eventName] || []
-    let i = 0
+  $$fireEventOnScope(eventName: string, event: Event, args: any[]) {
+    const listeners = this.$$listeners[eventName] || [];
+    let i = 0;
+    const listenerArgs = [event, ...args];
     while (i < listeners.length) {
-      if (listeners[i] === null) {
-        listeners.splice(i, 1)
+      if (listeners[i] == null) {
+        listeners.splice(i, 1);
       } else {
         try {
-          listeners[i].apply(null, listenerArgs)
+          listeners[i].apply(null, listenerArgs);
         } catch (err) {
-          console.error(err)
+          console.error(err);
         }
-        i++
+        i++;
       }
     }
   }
 
-  $$postDigest (fn) {
-    this.$$postDigestQueue.push(fn)
+  $$postDigest(fn: AnyFunction) {
+    this.$$postDigestQueue.push(fn);
   }
 
-  $apply (expr) {
+  $apply(expr: CallWith<Scope, any>) {
     try {
-      this.$beginPhase('$apply')
-      return this.$eval(expr)
+      this.$beginPhase('$apply');
+      return this.$eval(expr);
     } finally {
-      this.$clearPhase()
-      this.$root.$digest()
+      this.$clearPhase();
+      this.$root.$digest();
     }
   }
 
-  $applyAsync (expr) {
+  $applyAsync(expr: CallWith<Scope, any>) {
     this.$$applyAsyncQueue.push(() => {
-      this.$eval(expr)
-    })
+      this.$eval(expr);
+    });
     if (this.$root.$$applyAsyncId === null) {
       this.$root.$$applyAsyncId = setTimeout(() => {
         this.$apply(() => {
-          this.$$flushApplyAsync()
-        })
-      }, 0)
+          this.$$flushApplyAsync();
+        });
+      }, 0);
     }
   }
 
-  $$flushApplyAsync () {
+  $$flushApplyAsync() {
     while (this.$$applyAsyncQueue.length) {
       try {
-        this.$$applyAsyncQueue.shift()()
+        this.$$applyAsyncQueue.shift()();
       } catch (err) {
-        console.error(err)
+        console.error(err);
       }
     }
-    this.$root.$$applyAsyncId = null
+    this.$root.$$applyAsyncId = null;
   }
 
-  $beginPhase (phase) {
+  $beginPhase(phase: string) {
     if (this.$$phase) {
-      throw new Error(`${this.$$phase} already in progress.`)
+      throw new Error(`${this.$$phase} already in progress.`);
     }
-    this.$$phase = phase
+    this.$$phase = phase;
   }
 
-  $clearPhase () {
-    this.$$phase = null
+  $clearPhase() {
+    this.$$phase = null;
   }
 
-  $eval (expr, locals) {
-    return expr(this, locals)
+  $eval(expr: CallWith<Scope, any>, locals?: Object): any {
+    return expr(this, locals);
   }
 
-  $evalAsync (expr) {
+  $evalAsync(expr: CallWith<Scope, any>) {
     if (!this.$$phase && !this.$$asyncQueue.length) {
       setTimeout(() => {
         if (this.$$asyncQueue.length) {
-          this.$root.$digest()
+          this.$root.$digest();
         }
-      }, 0)
+      }, 0);
     }
     this.$$asyncQueue.push({
       scope: this,
       expression: expr
-    })
+    });
   }
 
-  $watch (watchFn, listenerFn, valueEq = false) {
-    const watcher = {
+  $watch(watchFn: CallWith<Scope, any>, listenerFn: ListenerFunction<any>, valueEq: boolean = false): AnyFunction {
+    const watcher: Watcher = {
       watchFn,
       listenerFn: listenerFn || (() => {}),
       valueEq,
       last: initWatchVal
-    }
-    this.$$watchers.unshift(watcher)
-    this.$root.$$lastDirtyWatch = null
+    };
+    this.$$watchers.unshift(watcher);
+    this.$root.$$lastDirtyWatch = null;
     return () => {
-      const index = this.$$watchers.indexOf(watcher)
+      const index = this.$$watchers.indexOf(watcher);
       if (index >= 0) {
-        this.$$watchers.splice(index, 1)
-        this.$root.$$lastDirtyWatch = null
+        this.$$watchers.splice(index, 1);
+        this.$root.$$lastDirtyWatch = null;
       }
-    }
+    };
   }
 
-  $watchGroup (watchFns, listenerFn) {
-    const newValues = new Array(watchFns.length)
-    const oldValues = new Array(watchFns.length)
-    let changeReactionSchedules = false
-    let firstRun = true
+  $watchGroup(watchFns: CallWith<Scope, any>[], listenerFn: ListenerFunction<any[]>): AnyFunction {
+    const newValues: any[] = new Array(watchFns.length);
+    const oldValues: any[] = new Array(watchFns.length);
+    let changeReactionSchedules = false;
+    let firstRun = true;
 
     if (watchFns.length === 0) {
-      let shouldCall = true
+      let shouldCall = true;
       this.$evalAsync(() => {
         if (shouldCall) {
-          listenerFn(newValues, newValues, this)
+          listenerFn(newValues, newValues, this);
         }
-      })
+      });
       return () => {
-        shouldCall = false
-      }
+        shouldCall = false;
+      };
     }
 
-    const watchGroupListener = () => {
+    const watchGroupListener: AnyFunction = () => {
       if (firstRun) {
-        firstRun = false
-        listenerFn(newValues, newValues, this)
+        firstRun = false;
+        listenerFn(newValues, newValues, this);
       } else {
-        listenerFn(newValues, oldValues, this)
+        listenerFn(newValues, oldValues, this);
       }
-      changeReactionSchedules = false
-    }
+      changeReactionSchedules = false;
+    };
 
-    const destroyFns = _.map(watchFns, (watchFn, i) => {
+    const destroyFns: AnyFunction[] = _.map(watchFns, (watchFn, i) => {
       return this.$watch(watchFn, (newValue, oldValue) => {
-        newValues[i] = newValue
-        oldValues[i] = oldValue
+        newValues[i] = newValue;
+        oldValues[i] = oldValue;
         if (!changeReactionSchedules) {
-          changeReactionSchedules = true
-          this.$evalAsync(watchGroupListener)
+          changeReactionSchedules = true;
+          this.$evalAsync(watchGroupListener);
         }
-      })
-    })
+      });
+    });
 
     return () => {
       _.each(destroyFns, destroyFn => {
-        destroyFn()
-      })
-    }
+        destroyFn();
+      });
+    };
   }
 
-  $watchCollection (watchFn, listenerFn) {
-    let newValue, oldValue
-    let changeCount = 0
-    let oldLength
-    const trackVeryOldValue = listenerFn.length > 1
-    let veryOldValue
-    let firstRun = true
+  $watchCollection(watchFn: CallWith<Scope, any>, listenerFn: ListenerFunction<any>): AnyFunction {
+    let newValue, oldValue;
+    let changeCount: number = 0;
+    let oldLength: number;
+    const trackVeryOldValue: boolean = listenerFn.length > 1;
+    let veryOldValue;
+    let firstRun: boolean = true;
 
-    const internalWatchFn = (scope) => {
-      let newLength
-      newValue = watchFn(scope)
+    const internalWatchFn: CallWith<Scope, number> = (scope) => {
+      let newLength;
+      newValue = watchFn(scope);
 
       if (_.isObject(newValue)) {
         if (strictIsArrayLike(newValue)) {
           if (!_.isArray(oldValue)) {
-            changeCount++
-            oldValue = []
+            changeCount++;
+            oldValue = [];
           }
           if (newValue.length !== oldValue.length) {
-            changeCount++
-            oldValue.length = newValue.length
+            changeCount++;
+            oldValue.length = newValue.length;
           }
           _.each(newValue, (newValueItem, i) => {
             if (!areEqual(newValueItem, oldValue[i], false)) {
-              changeCount++
-              oldValue[i] = newValueItem
+              changeCount++;
+              oldValue[i] = newValueItem;
             }
-          })
+          });
         } else {
           if (!_.isObject(oldValue) || strictIsArrayLike(oldValue)) {
-            changeCount++
-            oldValue = {}
-            oldLength = 0
+            changeCount++;
+            oldValue = {};
+            oldLength = 0;
           }
-          newLength = 0
+          newLength = 0;
           _.forOwn(newValue, (newValueVal, key) => {
-            newLength++
+            newLength++;
             if (oldValue.hasOwnProperty(key)) {
               if (!areEqual(newValueVal, oldValue[key], false)) {
-                changeCount++
-                oldValue[key] = newValueVal
+                changeCount++;
+                oldValue[key] = newValueVal;
               }
             } else {
-              changeCount++
-              oldLength++
-              oldValue[key] = newValueVal
+              changeCount++;
+              oldLength++;
+              oldValue[key] = newValueVal;
             }
-          })
+          });
           if (oldLength > newLength) {
-            changeCount++
+            changeCount++;
             _.forOwn(oldValue, (oldValueVal, key) => {
               if (!newValue.hasOwnProperty(key)) {
-                oldLength--
-                delete oldValue[key]
+                oldLength--;
+                delete oldValue[key];
               }
-            })
+            });
           }
         }
       } else {
         if (!areEqual(newValue, oldValue, false)) {
-          changeCount++
+          changeCount++;
         }
-        oldValue = newValue
+        oldValue = newValue;
       }
 
-      return changeCount
-    }
+      return changeCount;
+    };
 
     const internalListenerFn = () => {
       if (firstRun) {
-        listenerFn(newValue, newValue, this)
-        firstRun = false
+        listenerFn(newValue, newValue, this);
+        firstRun = false;
       } else {
-        listenerFn(newValue, veryOldValue, this)
+        listenerFn(newValue, veryOldValue, this);
       }
 
       if (trackVeryOldValue) {
-        veryOldValue = _.clone(newValue)
+        veryOldValue = _.clone(newValue);
       }
-    }
+    };
 
-    return this.$watch(internalWatchFn, internalListenerFn)
+    return this.$watch(internalWatchFn, internalListenerFn);
   }
 
-  $$digestOnce () {
-    let dirty = false
-    let continueLoop = true
+  $$digestOnce(): boolean {
+    let dirty: boolean = false;
+    let continueLoop: boolean = true;
     this.$$everyScope(scope => {
       _.eachRight(scope.$$watchers, watcher => {
         try {
           if (watcher) {
-            const newValue = watcher.watchFn(scope)
-            const oldValue = watcher.last
+            const newValue = watcher.watchFn(scope);
+            const oldValue = watcher.last;
             if (!areEqual(newValue, oldValue, watcher.valueEq)) {
-              scope.$root.$$lastDirtyWatch = watcher
-              watcher.last = watcher.valueEq ? _.cloneDeep(newValue) : newValue
+              scope.$root.$$lastDirtyWatch = watcher;
+              watcher.last = watcher.valueEq ? _.cloneDeep(newValue) : newValue;
               watcher.listenerFn(newValue,
                 (oldValue === initWatchVal ? newValue : oldValue),
-                scope)
-              dirty = true
+                scope);
+              dirty = true;
             } else if (scope.$root.$$lastDirtyWatch === watcher) {
-              continueLoop = false
-              return false
+              continueLoop = false;
+              return false;
             }
           }
         } catch (err) {
-          console.error(err)
+          console.error(err);
         }
-      })
-      return continueLoop
-    })
-    return dirty
+      });
+      return continueLoop;
+    });
+    return dirty;
   }
 
-  $digest () {
-    let dirty = false
-    let ttl = maxTTL
-    this.$root.$$lastDirtyWatch = null
-    this.$beginPhase('$digest')
+  $digest() {
+    let dirty: boolean = false;
+    let ttl: number = maxTTL;
+    this.$root.$$lastDirtyWatch = null;
+    this.$beginPhase('$digest');
 
     if (this.$root.$$applyAsyncId) {
-      clearTimeout(this.$root.$$applyAsyncId)
-      this.$$flushApplyAsync()
+      clearTimeout(this.$root.$$applyAsyncId);
+      this.$$flushApplyAsync();
     }
 
     do {
       while (this.$$asyncQueue.length) {
         try {
-          const asyncTask = this.$$asyncQueue.shift()
-          asyncTask.scope.$eval(asyncTask.expression)
+          const asyncTask = this.$$asyncQueue.shift();
+          asyncTask.scope.$eval(asyncTask.expression);
         } catch (err) {
-          console.error(err)
+          console.error(err);
         }
       }
-      dirty = this.$$digestOnce()
+      dirty = this.$$digestOnce();
       if (dirty || this.$$asyncQueue.length) {
-        ttl--
+        ttl--;
         if (ttl < 0) {
-          this.$clearPhase()
-          throw new Error('Max digest iterations reached')
+          this.$clearPhase();
+          throw new Error('Max digest iterations reached');
         }
       }
-    } while (dirty || this.$$asyncQueue.length)
+    } while (dirty || this.$$asyncQueue.length);
 
     while (this.$$postDigestQueue.length) {
       try {
-        this.$$postDigestQueue.shift()()
+        this.$$postDigestQueue.shift()();
       } catch (err) {
-        console.error(err)
+        console.error(err);
       }
     }
 
-    this.$clearPhase()
+    this.$clearPhase();
   }
 
-  $new (isolated = false, parent = this) {
-    let child
+  $new(isolated: boolean = false, parent?: Scope): Scope {
+    if (!parent) parent = this;
+    let child: Scope;
     if (isolated) {
-      child = new Scope()
-      child.$root = parent.$root
-      child.$$asyncQueue = parent.$$asyncQueue
-      child.$$postDigestQueue = parent.$$postDigestQueue
-      child.$$applyAsyncQueue = parent.$$applyAsyncQueue
+      child = new Scope();
+      child.$root = parent.$root;
+      child.$$asyncQueue = parent.$$asyncQueue;
+      child.$$postDigestQueue = parent.$$postDigestQueue;
+      child.$$applyAsyncQueue = parent.$$applyAsyncQueue;
     } else {
-      child = Object.create(this)
+      child = Object.create(this);
     }
-    parent.$$children.push(child)
-    child.$$watchers = []
-    child.$$children = []
-    child.$$listeners = {}
-    child.$parent = parent
-    return child
+    parent.$$children.push(child);
+    child.$$watchers = [];
+    child.$$children = [];
+    child.$$listeners = {};
+    child.$parent = parent;
+    return child;
   }
 
-  $$everyScope (fn) {
+  $$everyScope(fn: CallWith<Scope, boolean>): boolean {
     if (fn(this)) {
-      return this.$$children.every(child => child.$$everyScope(fn))
+      return this.$$children.every(child => child.$$everyScope(fn));
     } else {
-      return false
+      return false;
     }
   }
 
-  $destroy () {
-    this.$broadcast('$destroy')
+  $destroy() {
+    this.$broadcast('$destroy');
     if (this.$parent) {
-      const siblings = this.$parent.$$children
-      const index = siblings.indexOf(this)
+      const siblings = this.$parent.$$children;
+      const index = siblings.indexOf(this);
       if (index >= 0) {
-        siblings.splice(index, 1)
+        siblings.splice(index, 1);
       }
     }
-    this.$$watchers = null
-    this.$$listeners = {}
+    this.$$watchers = [];
+    this.$$listeners = {};
   }
 }
 
-export default Scope
+export default Scope;
