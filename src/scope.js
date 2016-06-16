@@ -31,7 +31,7 @@ type AsyncQueueItem = {
   scope: Scope,
   expression: CallWith<Scope, any>
 };
-type Event = {
+type ScopeEvent = {
   name: string,
   defaultPrevented: boolean,
   preventDefault: AnyFunction,
@@ -39,7 +39,7 @@ type Event = {
   currentScope: ?Scope,
   targetScope: Scope
 };
-type EventListener = (event: Event, ...rest: any[]) => any;
+type ScopeEventListener = (event: ScopeEvent, ...rest: any[]) => any;
 
 const initWatchVal: AnyFunction = () => {};
 const maxTTL: number = 10; // time to live
@@ -55,9 +55,9 @@ class Scope {
   $$children: Scope[] = [];
   $root: Scope = this;
   $parent: ?Scope = null;
-  $$listeners: { [key: string]: (?EventListener)[] } = {};
+  $$listeners: { [key: string]: (?ScopeEventListener)[] } = {};
 
-  $on(eventName: string, listener: EventListener): AnyFunction {
+  $on(eventName: string, listener: ScopeEventListener): AnyFunction {
     let listeners = this.$$listeners[eventName];
     if (!listeners) {
       this.$$listeners[eventName] = listeners = [];
@@ -71,9 +71,9 @@ class Scope {
     };
   }
 
-  $emit(eventName: string, ...args: any[]): Event {
+  $emit(eventName: string, ...args: any[]): ScopeEvent {
     let propagationStopped = false;
-    const event: Event = {
+    const event: ScopeEvent = {
       name: eventName,
       targetScope: this,
       currentScope: this,
@@ -95,8 +95,8 @@ class Scope {
     return event;
   }
 
-  $broadcast(eventName: string, ...args: any[]): Event {
-    const event: Event = {
+  $broadcast(eventName: string, ...args: any[]): ScopeEvent {
+    const event: ScopeEvent = {
       name: eventName,
       targetScope: this,
       currentScope: this,
@@ -114,7 +114,7 @@ class Scope {
     return event;
   }
 
-  $$fireEventOnScope(eventName: string, event: Event, args: any[]) {
+  $$fireEventOnScope(eventName: string, event: ScopeEvent, args: any[]) {
     const listeners = this.$$listeners[eventName] || [];
     let i = 0;
     const listenerArgs = [event, ...args];
