@@ -20,6 +20,11 @@ describe('Parse', function () {
     expect(fn()).to.be.false;
   });
 
+  it('will parse undefined', function () {
+    const fn = parse('undefined');
+    expect(fn()).to.be.undefined;
+  });
+
   it('ignores whitespaces', function () {
     const fn = parse(' \r\t\v\u00A0\n233');
     expect(fn()).to.equal(233);

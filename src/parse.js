@@ -20,7 +20,7 @@ function isWhiteSpace(ch: ?string) {
     ch === '\n' || ch === '\v' || ch === '\u00A0';
 }
 
-const ESCAPE_MAP = {
+const ESCAPE_MAP: { [key: string]: string } = {
   'n': '\n',
   'f': '\f',
   'r': '\r',
@@ -37,7 +37,7 @@ function stringEscapeFn(ch: string) {
   return `\\u${unicode.slice(-4)}`;
 }
 
-function escape(value: any): any {
+function escape<T>(value: T): T | string {
   if (typeof value === 'string') {
     return `'${value.replace(stringEscapeRegex, stringEscapeFn)}'`;
   } else if (value === null) {
@@ -66,7 +66,7 @@ class Lexer {
         number += ch;
       } else {
         const nextCh = this.peek();
-        const prevCh = _.last(number);
+        const prevCh = number[number.length - 1];
         if (ch === 'e' && isExpOperator(nextCh)) {
           number += ch;
         } else if (prevCh === 'e' && isExpOperator(ch) && nextCh && isNumber(nextCh)) {
@@ -272,7 +272,8 @@ const LanguageConstants: { [key: string]: (ASTThisExpressionNode | ASTLiteralNod
   'this': { type: ASTNodeType.ThisExpression },
   'null': { type: ASTNodeType.Literal, value: null },
   'true': { type: ASTNodeType.Literal, value: true },
-  'false': { type: ASTNodeType.Literal, value: false }
+  'false': { type: ASTNodeType.Literal, value: false },
+  'undefined': { type: ASTNodeType.Literal, value: undefined }
 };
 
 class AST {
@@ -345,7 +346,7 @@ class AST {
       primary = this.arrayDeclaration();
     } else if (this.expect('{')) {
       primary = this.object();
-    } else if (LanguageConstants.hasOwnProperty(this.tokens[0].text)) {
+    } else if (_.has(LanguageConstants, this.tokens[0].text)) {
       primary = LanguageConstants[this.consume().text];
     } else {
       const peek = this.peek();
@@ -456,7 +457,7 @@ function ensureSafeObject<T>(obj: T): T {
     // should not use obj === window, may be tricked by Object.create(window)
     if (obj.document && obj.location && obj.alert && obj.setTimeout) {
       throw new Error('Referencing window is not allowed');
-    }  else if ((obj: any).constructor === obj) {
+    } else if ((obj: any).constructor === obj) {
       throw new Error('Referencing Function is not allowed');
     } else if (obj.getOwnPropertyNames || obj.getOwnPropertyDescriptor) {
       throw new Error('Referencing Object is not allowed');
@@ -471,9 +472,9 @@ function ensureSafeFunction<T>(obj: T): T {
   if (obj) {
     if ((obj: any).constructor === obj) {
       throw new Error('Referencing Function is not allowed');
-    } else if (obj === Function.prototype.call
-      || obj === Function.prototype.apply
-      || obj === Function.prototype.bind) {
+    } else if (obj === Function.prototype.call ||
+      obj === Function.prototype.apply ||
+      obj === Function.prototype.bind) {
       throw new Error('Referencing call, apply or bind is not allowed');
     }
   }
@@ -487,8 +488,8 @@ type ASTCompilerState = {
 };
 
 type CallContext = {
-  context?: any,
-  name?: any,
+  context?: string,
+  name?: string,
   computed?: boolean
 };
 
@@ -661,7 +662,7 @@ class ASTCompiler {
     this.state.body.push(`ensureSafeObject(${expr});`);
   }
 
-  if_(test: any, consequent: string) {
+  if_(test: string, consequent: string) {
     this.state.body.push(`if(${test}){${consequent}}`);
   }
 

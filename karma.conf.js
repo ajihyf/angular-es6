@@ -1,5 +1,4 @@
 const LodashModuleReplacementPlugin = require('lodash-webpack-plugin');
-const FlowStatusWebpackPlugin = require('flow-status-webpack-plugin');
 
 module.exports = function (config) {
   config.set({
@@ -42,8 +41,7 @@ module.exports = function (config) {
     webpack: {
       devtool: 'inline-source-map',
       plugins: [
-        new LodashModuleReplacementPlugin(),
-        new FlowStatusWebpackPlugin()
+        new LodashModuleReplacementPlugin()
       ],
       module: {
         loaders: [

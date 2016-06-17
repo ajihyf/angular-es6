@@ -314,7 +314,7 @@ class Scope {
           });
           if (oldLength > newLength) {
             changeCount++;
-            _.forOwn(oldValue, (oldValueVal, key) => {
+            _.forOwn((oldValue: any), (oldValueVal, key) => {
               if (!newValue.hasOwnProperty(key)) {
                 oldLength--;
                 delete oldValue[key];

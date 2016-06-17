@@ -7,7 +7,7 @@ declare var describe: {
   timeout(ms:number): void;
 };
 
-declare type context = typeof describe;
+declare var context: typeof describe;
 
 declare var it : {
   (name:string, spec:TestFunction): void;
