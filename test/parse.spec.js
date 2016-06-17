@@ -403,4 +403,99 @@ describe('Parse', function () {
       }).to.throw();
     });
   });
+
+  describe('Ensuring Safe Object', function () {
+    it('does not allow accessing window as computed property', function () {
+      expect(() => {
+        const fn = parse('obj["wnd"]');
+        fn({ obj: { wnd: window } });
+      }).to.throw();
+    });
+
+    it('does not allow accessing window as non-computed property', function () {
+      expect(() => {
+        const fn = parse('obj.wnd');
+        fn({ obj: { wnd: window } });
+      }).to.throw();
+    });
+
+    it('does not allow calling methods on window', function () {
+      expect(() => {
+        const fn = parse('wd.scroll(0, 100)');
+        fn({ wd: window });
+      }).to.throw();
+    });
+
+    it('does not allow function returns window', function () {
+      expect(() => {
+        const fn = parse('getWd()');
+        fn({ getWd: _.constant(window) });
+      }).to.throw();
+    });
+
+    it('does not allow assigning window', function () {
+      expect(() => {
+        const fn = parse('a = wd');
+        fn({ wd: window });
+      }).to.throw();
+    });
+
+    it('does not allow shadow window', function () {
+      expect(() => {
+        const fn = parse('a = wd');
+        fn({ wd: Object.create(window) });
+      }).to.throw();
+    });
+
+    it('does not allow referencing window', function () {
+      expect(() => {
+        const fn = parse('wd');
+        fn({ wd: window });
+      }).to.throw();
+    });
+
+    it('does not allow call functions on DOM elements', function () {
+      expect(() => {
+        const fn = parse('el.setAttribute("id", "abc")');
+        fn({ el: document.documentElement });
+      }).to.throw();
+    });
+
+    it('does not allow calling the aliased function constructor', function () {
+      expect(() => {
+        const fn = parse('fnConstructor("return window;")');
+        fn({ fnConstructor: (() => {}).constructor });
+      }).to.throw();
+    });
+
+    it('does not allow calling function on Object', function () {
+      expect(() => {
+        const fn = parse('obj.create({})');
+        fn({ obj: Object });
+      }).to.throw();
+    });
+  });
+
+  describe('Ensuring Safe Functions', function () {
+    it('does not allow calling call', function () {
+      expect(() => {
+        const fn = parse('fn.call(obj)');
+        fn({ fn: () => {}, obj: {} });
+      }).to.throw();
+    });
+
+    it('does not allow calling apply', function () {
+      expect(() => {
+        const fn = parse('fn.apply(obj)');
+        fn({ fn: () => {}, obj: {} });
+      }).to.throw();
+    });
+
+    it('does not allow calling bind', function () {
+      expect(() => {
+        const fn = parse('fn.bind(obj)()');
+        fn({ fn: () => {}, obj: {} });
+      }).to.throw();
+    });
+  });
 });

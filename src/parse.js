@@ -444,6 +444,42 @@ function ensureSafeMemberName(name: string) {
   }
 }
 
+function isDOMNode(o: any): boolean {
+  return (
+    typeof Node === 'object' ? o instanceof Node
+      : o && typeof o === 'object' && typeof o.nodeType === 'number' && typeof o.nodeName === 'string'
+  );
+}
+
+function ensureSafeObject<T>(obj: T): T {
+  if (obj) {
+    // should not use obj === window, may be tricked by Object.create(window)
+    if (obj.document && obj.location && obj.alert && obj.setTimeout) {
+      throw new Error('Referencing window is not allowed');
+    }  else if ((obj: any).constructor === obj) {
+      throw new Error('Referencing Function is not allowed');
+    } else if (obj.getOwnPropertyNames || obj.getOwnPropertyDescriptor) {
+      throw new Error('Referencing Object is not allowed');
+    } else if (isDOMNode(obj)) {
+      throw new Error('Referencing DOM node is not allowed');
+    }
+  }
+  return obj;
+}
+
+function ensureSafeFunction<T>(obj: T): T {
+  if (obj) {
+    if ((obj: any).constructor === obj) {
+      throw new Error('Referencing Function is not allowed');
+    } else if (obj === Function.prototype.call
+      || obj === Function.prototype.apply
+      || obj === Function.prototype.bind) {
+      throw new Error('Referencing call, apply or bind is not allowed');
+    }
+  }
+  return obj;
+}
+
 type ASTCompilerState = {
   body: string[],
   nextId: number,
@@ -477,7 +513,14 @@ class ASTCompiler {
     return fn;
     `;
     /* eslint-disable no-new-func */
-    const fn = new Function('ensureSafeMemberName', fnString)(ensureSafeMemberName);
+    const fn = new Function(
+      'ensureSafeMemberName',
+      'ensureSafeObject',
+      'ensureSafeFunction',
+      fnString)(
+      ensureSafeMemberName,
+      ensureSafeObject,
+      ensureSafeFunction);
     /* eslint-enable no-new-func */
     return (fn: any);
   }
@@ -527,6 +570,7 @@ class ASTCompiler {
           inContext.name = ast.name;
           inContext.computed = false;
         }
+        this.addEnsureSafeObject(varId);
         return varId;
       case ASTNodeType.ThisExpression:
         return 's';
@@ -547,7 +591,7 @@ class ASTCompiler {
           }
           this.if_(left,
             ASTCompiler.assign(varId,
-              ASTCompiler.computedMember(left, right)));
+              `ensureSafeObject(${ASTCompiler.computedMember(left, right)})`));
           if (inContext) {
             inContext.computed = true;
             inContext.name = right;
@@ -562,7 +606,7 @@ class ASTCompiler {
           }
           this.if_(left,
             ASTCompiler.assign(varId,
-              ASTCompiler.nonComputedMember(left, ast.property.name)));
+              `ensureSafeObject(${ASTCompiler.nonComputedMember(left, ast.property.name)})`));
           if (inContext) {
             inContext.computed = false;
             inContext.name = ast.property.name;
@@ -572,15 +616,18 @@ class ASTCompiler {
       case ASTNodeType.CallExpression:
         const callContext: CallContext = {};
         let callee = this.recurse(ast.callee, callContext);
-        const args = _.map(ast.arguments, arg => this.recurse(arg));
+        const args = _.map(ast.arguments,
+          arg => `ensureSafeObject(${this.recurse(arg)})`);
         if (callContext.context && callContext.name) {
           if (callContext.computed) {
             callee = ASTCompiler.computedMember(callContext.context, callContext.name);
           } else {
             callee = ASTCompiler.nonComputedMember(callContext.context, callContext.name);
           }
+          this.addEnsureSafeObject(callContext.context);
         }
-        return `${callee} && ${callee}(${args.join(',')})`;
+        this.addEnsureSafeFunction(callee);
+        return `${callee} && ensureSafeObject(${callee}(${args.join(',')}))`;
       case ASTNodeType.AssignmentExpression:
         const leftContext: CallContext = {};
         this.recurse(ast.left, leftContext, true);
@@ -595,14 +642,23 @@ class ASTCompiler {
         if (leftExpr == null) {
           throw new Error(`Unable to get leftContext info: ${JSON.stringify(leftContext)}`);
         }
-        return ASTCompiler.assign(leftExpr, this.recurse(ast.right));
+        return ASTCompiler.assign(leftExpr,
+          `ensureSafeObject(${this.recurse(ast.right)})`);
       default:
         throw new Error('Unknown ASTNode type');
     }
   }
 
+  addEnsureSafeFunction(expr: string) {
+    this.state.body.push(`ensureSafeFunction(${expr});`);
+  }
+
   addEnsureSafeMemberName(expr: string) {
     this.state.body.push(`ensureSafeMemberName(${expr});`);
+  }
+
+  addEnsureSafeObject(expr: string) {
+    this.state.body.push(`ensureSafeObject(${expr});`);
   }
 
   if_(test: any, consequent: string) {
