@@ -1,4 +1,4 @@
-const LodashModuleReplacementPlugin = require('lodash-webpack-plugin')
+const LodashModuleReplacementPlugin = require('lodash-webpack-plugin');
 const FlowStatusWebpackPlugin = require('flow-status-webpack-plugin');
 
 module.exports = function (config) {

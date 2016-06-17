@@ -1,15 +1,15 @@
-const webpack = require('webpack')
-const LodashModuleReplacementPlugin = require('lodash-webpack-plugin')
+const webpack = require('webpack');
+const LodashModuleReplacementPlugin = require('lodash-webpack-plugin');
 
-const env = process.env.NODE_ENV || 'development'
+const env = process.env.NODE_ENV || 'development';
 
 const plugins = [
   new LodashModuleReplacementPlugin(),
   new webpack.optimize.OccurenceOrderPlugin()
-]
+];
 
 if (env === 'production') {
-  plugins.push(new webpack.optimize.UglifyJsPlugin())
+  plugins.push(new webpack.optimize.UglifyJsPlugin());
 }
 
 module.exports = {
@@ -24,4 +24,4 @@ module.exports = {
     ]
   },
   plugins: plugins
-}
+};
