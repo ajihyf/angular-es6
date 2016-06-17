@@ -1,3 +1,4 @@
+/* @flow */
 /* eslint-env mocha */
 import parse from '../src/parse';
 import { expect } from 'chai';

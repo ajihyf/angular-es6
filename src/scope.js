@@ -20,7 +20,7 @@ function strictIsArrayLike(obj) {
   return isArrayLike;
 }
 
-type ListenerFunction<T> = (newValue?: T, oldValue?: T, scope?: Scope) => any;
+type ListenerFunction<T> = (newValue: T, oldValue: T, scope: Scope) => any;
 type Watcher = {
   watchFn: CallWith<Scope, any>,
   listenerFn: ListenerFunction<any>,
@@ -181,7 +181,7 @@ class Scope {
     this.$$phase = null;
   }
 
-  $eval(expr: CallWith<Scope, any>, locals?: Object): any {
+  $eval(expr: CallWith<Scope, any>, locals?: any): any {
     return expr(this, locals);
   }
 
@@ -199,7 +199,7 @@ class Scope {
     });
   }
 
-  $watch(watchFn: CallWith<Scope, any>, listenerFn: ListenerFunction<any>, valueEq: boolean = false): AnyFunction {
+  $watch(watchFn: CallWith<Scope, any>, listenerFn?: ListenerFunction<any>, valueEq?: boolean = false): AnyFunction {
     const watcher: Watcher = {
       watchFn,
       listenerFn: listenerFn || (() => {}),
@@ -217,7 +217,7 @@ class Scope {
     };
   }
 
-  $watchGroup(watchFns: CallWith<Scope, any>[], listenerFn: ListenerFunction<any[]>): AnyFunction {
+  $watchGroup(watchFns: CallWith<Scope, any>[], listenerFn?: ListenerFunction<any[]>): AnyFunction {
     const newValues: any[] = new Array(watchFns.length);
     const oldValues: any[] = new Array(watchFns.length);
     let changeReactionSchedules = false;
@@ -226,7 +226,7 @@ class Scope {
     if (watchFns.length === 0) {
       let shouldCall = true;
       this.$evalAsync(() => {
-        if (shouldCall) {
+        if (shouldCall && listenerFn != null) {
           listenerFn(newValues, newValues, this);
         }
       });
@@ -236,6 +236,7 @@ class Scope {
     }
 
     const watchGroupListener: AnyFunction = () => {
+      if (!listenerFn) return;
       if (firstRun) {
         firstRun = false;
         listenerFn(newValues, newValues, this);

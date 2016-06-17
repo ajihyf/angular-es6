@@ -464,7 +464,7 @@ class ASTCompiler {
     this.astBuilder = astBuilder;
   }
 
-  compile(text: string): (s: any, l: any) => any {
+  compile(text: string): ParsedFunction {
     const ast: ASTNode = this.astBuilder.ast(text);
     this.state = { body: [], nextId: 0, vars: [] };
     this.recurse(ast);
@@ -641,15 +641,16 @@ class Parser {
     this.astCompiler = new ASTCompiler(this.ast);
   }
 
-  parse(text) {
+  parse(text): ParsedFunction {
     return this.astCompiler.compile(text);
   }
 }
 
-function parse(expr: string) {
+function parse(expr: string): ParsedFunction {
   const lexer = new Lexer();
   const parser = new Parser(lexer);
   return parser.parse(expr);
 }
 
+type ParsedFunction = (scope?: any, locals?: any) => any;
 export default parse;
