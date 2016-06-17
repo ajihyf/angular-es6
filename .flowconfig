@@ -1,9 +1,9 @@
 [ignore]
 ./build/
 [include]
-./src/
 [libs]
 ./interfaces/
 [options]
 esproposal.class_instance_fields=enable
 esproposal.class_static_fields=enable
+munge_underscores=false

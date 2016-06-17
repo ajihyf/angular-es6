@@ -1,5 +1,5 @@
-declare type AnyFunction = () => any;
-declare type CallWith<U, V> = (u: U) => V;
+declare type AnyFunction = () => any; // eslint-disable-line
+declare type CallWith<U, V> = (u: U) => V; // eslint-disable-line
 
 declare var describe: any;
 declare var it: any;
