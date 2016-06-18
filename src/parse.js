@@ -30,6 +30,12 @@ const ESCAPE_MAP: { [key: string]: string } = {
   '"': '"'
 };
 
+const OperatorsMap: { [key: string]: true } = {
+  '+': true,
+  '!': true,
+  '-': true
+};
+
 const stringEscapeRegex: RegExp = /[^ a-zA-Z0-9]/g;
 
 function stringEscapeFn(ch: string) {
@@ -55,7 +61,6 @@ type LexToken = {
 class Lexer {
   text: string;
   index: number;
-  ch: ?string;
   tokens: LexToken[];
 
   readNumber() {
@@ -88,9 +93,11 @@ class Lexer {
   readString(quote: string) {
     this.index++;
     let str: string = '';
+    let rawString: string = '';
     let escape: boolean = false;
     while (this.index < this.text.length) {
       const ch = this.text.charAt(this.index);
+      rawString += ch;
       if (escape) {
         if (ch === 'u') {
           const hex = this.peek(4);
@@ -111,7 +118,7 @@ class Lexer {
       } else if (ch === quote) {
         this.index++;
         this.tokens.push({
-          text: str,
+          text: rawString,
           value: str
         });
         return;
@@ -145,27 +152,32 @@ class Lexer {
   lex(text: string): LexToken[] {
     this.text = text;
     this.index = 0;
-    this.ch = null;
     this.tokens = [];
 
     while (this.index < this.text.length) {
-      this.ch = this.text.charAt(this.index);
-      if (isNumber(this.ch) ||
-        (this.chIsIn('.') && isNumber(this.peek()))) {
+      const ch = this.text.charAt(this.index);
+      if (isNumber(ch) ||
+        (ch === '.' && isNumber(this.peek()))) {
         this.readNumber();
-      } else if (this.ch != null && this.chIsIn('\'"')) {
-        this.readString(this.ch);
-      } else if (this.ch != null && this.chIsIn('[],{}:.()=')) {
+      } else if (_.includes('\'"', ch)) {
+        this.readString(ch);
+      } else if (_.includes('[],{}:.()=', ch)) {
         this.tokens.push({
-          text: this.ch
+          text: ch
         });
         this.index++;
-      } else if (isIdentifier(this.ch)) {
+      } else if (isIdentifier(ch)) {
         this.readIdentifier();
-      } else if (isWhiteSpace(this.ch)) {
+      } else if (isWhiteSpace(ch)) {
         this.index++;
       } else {
-        throw new Error(`Unexpected next character: ${this.ch}`);
+        const op = OperatorsMap[ch];
+        if (op) {
+          this.tokens.push({ text: ch });
+          this.index++;
+        } else {
+          throw new Error(`Unexpected next character: ${ch}`);
+        }
       }
     }
 
@@ -178,11 +190,6 @@ class Lexer {
     }
     return this.text.substr(this.index + 1, offset);
   }
-
-  chIsIn(str: string) {
-    if (!this.ch) return false;
-    return str.indexOf(this.ch) >= 0;
-  }
 }
 
 type ASTNode = ASTProgramNode
@@ -194,7 +201,8 @@ type ASTNode = ASTProgramNode
   | ASTThisExpressionNode
   | ASTMemberExpressionNode
   | ASTCallExpressionNode
-  | ASTAssignmentExpressionNode;
+  | ASTAssignmentExpressionNode
+  | ASTUnaryExpressionNode;
 
 type ASTProgramNode = {
   type: 'Program',
@@ -255,6 +263,12 @@ type ASTAssignmentExpressionNode = {
   right: ASTNode
 };
 
+type ASTUnaryExpressionNode = {
+  type: 'UnaryExpression',
+  operator: string,
+  argument: ASTNode
+};
+
 const ASTNodeType = {
   Program: 'Program',
   Literal: 'Literal',
@@ -265,7 +279,8 @@ const ASTNodeType = {
   ThisExpression: 'ThisExpression',
   MemberExpression: 'MemberExpression',
   CallExpression: 'CallExpression',
-  AssignmentExpression: 'AssignmentExpression'
+  AssignmentExpression: 'AssignmentExpression',
+  UnaryExpression: 'UnaryExpression'
 };
 
 const LanguageConstants: { [key: string]: (ASTThisExpressionNode | ASTLiteralNode) } = {
@@ -329,9 +344,9 @@ class AST {
   }
 
   assignment(): ASTNode {
-    const left = this.primary();
+    const left = this.unary();
     if (this.expect('=')) {
-      const right = this.primary();
+      const right = this.unary();
       return {
         type: ASTNodeType.AssignmentExpression,
         left, right
@@ -430,11 +445,29 @@ class AST {
   }
 
   constant(): ASTLiteralNode {
-    return { type: ASTNodeType.Literal, value: this.consume().value };
+    const node = this.consume();
+    return { type: ASTNodeType.Literal, value: node.value };
   }
 
   identifier(): ASTIdentifierNode {
-    return { type: ASTNodeType.Identifier, name: this.consume().text };
+    const node = this.consume();
+    if (!node.identifier) {
+      throw new Error(`Tokenize Error: ${node.text} is not an identifier`);
+    }
+    return { type: ASTNodeType.Identifier, name: node.text };
+  }
+
+  unary(): ASTNode {
+    const token = this.expect('+', '!', '-');
+    if (token) {
+      return {
+        type: ASTNodeType.UnaryExpression,
+        operator: token.text,
+        argument: this.unary()
+      };
+    } else {
+      return this.primary();
+    }
   }
 }
 
@@ -481,6 +514,10 @@ function ensureSafeFunction<T>(obj: T): T {
   return obj;
 }
 
+function isDefined<U, V>(value: U, defaultValue: V): U | V {
+  return typeof value === 'undefined' ? defaultValue : value;
+}
+
 type ASTCompilerState = {
   body: string[],
   nextId: number,
@@ -518,10 +555,12 @@ class ASTCompiler {
       'ensureSafeMemberName',
       'ensureSafeObject',
       'ensureSafeFunction',
+      'isDefined',
       fnString)(
       ensureSafeMemberName,
       ensureSafeObject,
-      ensureSafeFunction);
+      ensureSafeFunction,
+      isDefined);
     /* eslint-enable no-new-func */
     return (fn: any);
   }
@@ -645,6 +684,8 @@ class ASTCompiler {
         }
         return ASTCompiler.assign(leftExpr,
           `ensureSafeObject(${this.recurse(ast.right)})`);
+      case ASTNodeType.UnaryExpression:
+        return `${ast.operator}(${ASTCompiler.isDefined(this.recurse(ast.argument), 0)})`;
       default:
         throw new Error('Unknown ASTNode type');
     }
@@ -664,6 +705,10 @@ class ASTCompiler {
 
   if_(test: string, consequent: string) {
     this.state.body.push(`if(${test}){${consequent}}`);
+  }
+
+  static isDefined(value: any, defaultValue: any): string {
+    return `isDefined(${value}, ${escape(defaultValue)})`;
   }
 
   static computedMember(left: string, right: string): string {

@@ -503,4 +503,34 @@ describe('Parse', function () {
       }).to.throw();
     });
   });
+
+  describe('Operators', function () {
+    it('parses a unary +', function () {
+      expect(parse('+233')()).to.equal(233);
+      expect(parse('+a')({ a: 233 })).to.equal(233);
+    });
+
+    it('replaces undefined with zeor for unary +', function () {
+      expect(parse('+a')({})).to.equal(0);
+    });
+
+    it('parses a unary !', function () {
+      expect(parse('!true')()).to.be.false;
+      expect(parse('!233')()).to.be.false;
+      expect(parse('!a')({ a: false })).to.be.true;
+      expect(parse('!!a')({ a: false })).to.be.false;
+      expect(parse('!!!a')({ a: true })).to.be.false;
+    });
+
+    it('parses a unary -', function () {
+      expect(parse('-233')()).to.equal(-233);
+      expect(parse('-a')({ a: -233 })).to.equal(233);
+      expect(parse('--a')({ a: 233 })).to.equal(233);
+      expect(parse('-a')({})).to.equal(0);
+    });
+
+    it('parses a ! in string', function () {
+      expect(parse('"!"')()).to.equal('!');
+    });
+  });
 });
