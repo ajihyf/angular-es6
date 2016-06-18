@@ -45,7 +45,9 @@ const OperatorsMap: { [key: string]: true } = {
   '<': true,
   '>': true,
   '<=': true,
-  '>=': true
+  '>=': true,
+  '&&': true,
+  '||': true
 };
 
 const stringEscapeRegex: RegExp = /[^ a-zA-Z0-9]/g;
@@ -222,7 +224,8 @@ type ASTNode = ASTProgramNode
   | ASTCallExpressionNode
   | ASTAssignmentExpressionNode
   | ASTUnaryExpressionNode
-  | ASTBinaryExpressionNode;
+  | ASTBinaryExpressionNode
+  | ASTLogicalExpressionNode;
 
 type ASTProgramNode = {
   type: 'Program',
@@ -296,6 +299,13 @@ type ASTBinaryExpressionNode = {
   right: ASTNode
 };
 
+type ASTLogicalExpressionNode = {
+  type: 'LogicalExpression',
+  operator: string,
+  left: ASTNode,
+  right: ASTNode
+};
+
 const ASTNodeType = {
   Program: 'Program',
   Literal: 'Literal',
@@ -308,7 +318,8 @@ const ASTNodeType = {
   CallExpression: 'CallExpression',
   AssignmentExpression: 'AssignmentExpression',
   UnaryExpression: 'UnaryExpression',
-  BinaryExpression: 'BinaryExpression'
+  BinaryExpression: 'BinaryExpression',
+  LogicalExpression: 'LogicalExpression'
 };
 
 const LanguageConstants: { [key: string]: (ASTThisExpressionNode | ASTLiteralNode) } = {
@@ -327,6 +338,29 @@ class AST {
     this.lexer = lexer;
   }
 
+  peek(...expections: Array<?string>): ?LexToken {
+    if (this.tokens.length > 0) {
+      const text = this.tokens[0].text;
+      if (_.includes(expections, text) || _.every(expections, _.isNil)) {
+        return this.tokens[0];
+      }
+    }
+  }
+
+  expect(...expections: Array<?string>): ?LexToken {
+    const token = this.peek(...expections);
+    if (token) {
+      return this.tokens.shift();
+    }
+  }
+
+  consume(e: ?string): LexToken {
+    const token = this.expect(e);
+    if (!token) {
+      throw new Error(`Unexpected. Expected ${e}`);
+    }
+    return token;
+  }
   ast(text): ASTNode {
     this.tokens = this.lexer.lex(text);
     return this.program();
@@ -372,9 +406,9 @@ class AST {
   }
 
   assignment(): ASTNode {
-    const left = this.equality();
+    const left = this.logicalOR();
     if (this.expect('=')) {
-      const right = this.equality();
+      const right = this.logicalOR();
       return {
         type: ASTNodeType.AssignmentExpression,
         left, right
@@ -410,30 +444,6 @@ class AST {
       }
     }
     return primary;
-  }
-
-  peek(...expections: Array<?string>): ?LexToken {
-    if (this.tokens.length > 0) {
-      const text = this.tokens[0].text;
-      if (_.includes(expections, text) || _.every(expections, _.isNil)) {
-        return this.tokens[0];
-      }
-    }
-  }
-
-  expect(...expections: Array<?string>): ?LexToken {
-    const token = this.peek(...expections);
-    if (token) {
-      return this.tokens.shift();
-    }
-  }
-
-  consume(e: ?string): LexToken {
-    const token = this.expect(e);
-    if (!token) {
-      throw new Error(`Unexpected. Expected ${e}`);
-    }
-    return token;
   }
 
   object(): ASTObjectNode {
@@ -548,6 +558,34 @@ class AST {
         type: ASTNodeType.BinaryExpression,
         left: left,
         right: this.additive(),
+        operator: token.text
+      };
+    }
+    return left;
+  }
+
+  logicalAND(): ASTNode {
+    let left: ASTNode = this.equality();
+    let token: ?LexToken;
+    while ((token = this.expect('&&'))) {
+      left = {
+        type: ASTNodeType.LogicalExpression,
+        left: left,
+        right: this.equality(),
+        operator: token.text
+      };
+    }
+    return left;
+  }
+
+  logicalOR(): ASTNode {
+    let left: ASTNode = this.logicalAND();
+    let token: ?LexToken;
+    while ((token = this.expect('||'))) {
+      left = {
+        type: ASTNodeType.LogicalExpression,
+        left: left,
+        right: this.logicalAND(),
         operator: token.text
       };
     }
@@ -776,6 +814,12 @@ class ASTCompiler {
           (${ASTCompiler.isDefined(this.recurse(ast.right), 0)})`;
         }
         return `(${this.recurse(ast.left)}) ${ast.operator} (${this.recurse(ast.right)})`;
+      case ASTNodeType.LogicalExpression:
+        varId = this.nextId();
+        this.state.body.push(ASTCompiler.assign(varId, this.recurse(ast.left)));
+        this.if_(ast.operator === '&&' ? varId : ASTCompiler.not(varId),
+          ASTCompiler.assign(varId, this.recurse(ast.right)));
+        return varId;
       default:
         throw new Error('Unknown ASTNode type');
     }

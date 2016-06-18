@@ -3,6 +3,7 @@
 import parse from '../src/parse';
 import { expect } from 'chai';
 import _ from 'lodash';
+import sinon from 'sinon';
 
 describe('Parse', function () {
   it('will parse null', function () {
@@ -599,6 +600,46 @@ describe('Parse', function () {
 
     it('parses relations on a higher precedence than equality', function () {
       expect(parse('2 === "2" > 2 === "2"')()).to.be.false;
+    });
+
+    it('parses logical AND', function () {
+      expect(parse('true && true')()).to.be.true;
+      expect(parse('true && false')()).to.be.false;
+    });
+
+    it('parses logical OR', function () {
+      expect(parse('true || true')()).to.be.true;
+      expect(parse('true || false')()).to.be.true;
+      expect(parse('false || false')()).to.be.false;
+    });
+
+    it('parses multiple ANDs', function () {
+      expect(parse('true && true && true')()).to.be.true;
+      expect(parse('true && true && false')()).to.be.false;
+    });
+
+    it('short circuits AND', function () {
+      const spy = sinon.spy();
+      parse('false && fn()')({ fn: spy });
+      expect(spy).to.have.not.been.called;
+    });
+
+    it('short circuits OR', function () {
+      const spy = sinon.spy();
+      parse('true || fn()')({ fn: spy });
+      expect(spy).to.have.not.been.called;
+    });
+
+    it('parses AND with a higher precedence than OR', function () {
+      expect(parse('false && true || true')()).to.be.true;
+    });
+
+    it('parses equality with a higher precedence than OR', function () {
+      expect(parse('1 === 2 || 2 === 2')()).to.be.true;
+    });
+
+    it('parses equality with a higher precedence than AND', function () {
+      expect(parse('2 === 2 && 2 === 2')()).to.be.true;
     });
   });
 });
