@@ -33,7 +33,10 @@ const ESCAPE_MAP: { [key: string]: string } = {
 const OperatorsMap: { [key: string]: true } = {
   '+': true,
   '!': true,
-  '-': true
+  '-': true,
+  '*': true,
+  '/': true,
+  '%': true
 };
 
 const stringEscapeRegex: RegExp = /[^ a-zA-Z0-9]/g;
@@ -202,7 +205,8 @@ type ASTNode = ASTProgramNode
   | ASTMemberExpressionNode
   | ASTCallExpressionNode
   | ASTAssignmentExpressionNode
-  | ASTUnaryExpressionNode;
+  | ASTUnaryExpressionNode
+  | ASTBinaryExpressionNode;
 
 type ASTProgramNode = {
   type: 'Program',
@@ -269,6 +273,13 @@ type ASTUnaryExpressionNode = {
   argument: ASTNode
 };
 
+type ASTBinaryExpressionNode = {
+  type: 'BinaryExpression',
+  operator: string,
+  left: ASTNode,
+  right: ASTNode
+};
+
 const ASTNodeType = {
   Program: 'Program',
   Literal: 'Literal',
@@ -280,7 +291,8 @@ const ASTNodeType = {
   MemberExpression: 'MemberExpression',
   CallExpression: 'CallExpression',
   AssignmentExpression: 'AssignmentExpression',
-  UnaryExpression: 'UnaryExpression'
+  UnaryExpression: 'UnaryExpression',
+  BinaryExpression: 'BinaryExpression'
 };
 
 const LanguageConstants: { [key: string]: (ASTThisExpressionNode | ASTLiteralNode) } = {
@@ -344,9 +356,9 @@ class AST {
   }
 
   assignment(): ASTNode {
-    const left = this.unary();
+    const left = this.additive();
     if (this.expect('=')) {
-      const right = this.unary();
+      const right = this.additive();
       return {
         type: ASTNodeType.AssignmentExpression,
         left, right
@@ -468,6 +480,34 @@ class AST {
     } else {
       return this.primary();
     }
+  }
+
+  multiplicative(): ASTNode {
+    let left: ASTNode = this.unary();
+    let token: ?LexToken;
+    while ((token = this.expect('*', '/', '%'))) {
+      left = {
+        type: ASTNodeType.BinaryExpression,
+        operator: token.text,
+        left: left,
+        right: this.unary()
+      };
+    }
+    return left;
+  }
+
+  additive(): ASTNode {
+    let left: ASTNode = this.multiplicative();
+    let token: ?LexToken;
+    while ((token = this.expect('+', '-'))) {
+      left = {
+        type: ASTNodeType.BinaryExpression,
+        operator: token.text,
+        left: left,
+        right: this.multiplicative()
+      };
+    }
+    return left;
   }
 }
 
@@ -686,6 +726,12 @@ class ASTCompiler {
           `ensureSafeObject(${this.recurse(ast.right)})`);
       case ASTNodeType.UnaryExpression:
         return `${ast.operator}(${ASTCompiler.isDefined(this.recurse(ast.argument), 0)})`;
+      case ASTNodeType.BinaryExpression:
+        if (ast.operator === '+' || ast.operator === '-') {
+          return `(${ASTCompiler.isDefined(this.recurse(ast.left), 0)}) ${ast.operator} \
+          (${ASTCompiler.isDefined(this.recurse(ast.right), 0)})`;
+        }
+        return `(${this.recurse(ast.left)}) ${ast.operator} (${this.recurse(ast.right)})`;
       default:
         throw new Error('Unknown ASTNode type');
     }

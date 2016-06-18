@@ -510,7 +510,7 @@ describe('Parse', function () {
       expect(parse('+a')({ a: 233 })).to.equal(233);
     });
 
-    it('replaces undefined with zeor for unary +', function () {
+    it('replaces undefined with zero for unary +', function () {
       expect(parse('+a')({})).to.equal(0);
     });
 
@@ -531,6 +531,51 @@ describe('Parse', function () {
 
     it('parses a ! in string', function () {
       expect(parse('"!"')()).to.equal('!');
+    });
+
+    it('parses a multiplication', function () {
+      expect(parse('333 * 3')()).to.equal(999);
+    });
+
+    it('parses a division', function () {
+      expect(parse('333 / 3')()).to.equal(111);
+    });
+
+    it('parses a multiplication', function () {
+      expect(parse('335 % 3')()).to.equal(2);
+    });
+
+    it('parses serveral multiplications', function () {
+      expect(parse('333 * 3 / 9')()).to.equal(111);
+    });
+
+    it('parses an addition', function () {
+      expect(parse('230 + 3')()).to.equal(233);
+    });
+
+    it('parses an subtraction', function () {
+      expect(parse('236 - 3')()).to.equal(233);
+    });
+
+    it('parses multiplicatives on a higher precedence than additives', function () {
+      expect(parse('3 + 3 * 3')()).to.equal(12);
+      expect(parse('3 + 3 * 3 + 100')()).to.equal(112);
+      expect(parse('3 + 3 * 3 - 100')()).to.equal(-88);
+    });
+
+    it('parses multiplicatives with unaries', function () {
+      expect(parse('3 + 3 * -3')()).to.equal(-6);
+      expect(parse('3 - 3 * +3')()).to.equal(-6);
+    });
+
+    it('substitutes undefined with zero in addition', function () {
+      expect(parse('a + 3')()).to.equal(3);
+      expect(parse('3 + a')()).to.equal(3);
+    });
+
+    it('substitutes undefined with zero in subtraction', function () {
+      expect(parse('a - 3')()).to.equal(-3);
+      expect(parse('3 - a')()).to.equal(3);
     });
   });
 });
