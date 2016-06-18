@@ -641,5 +641,37 @@ describe('Parse', function () {
     it('parses equality with a higher precedence than AND', function () {
       expect(parse('2 === 2 && 2 === 2')()).to.be.true;
     });
+
+    it('parses the ternary expression', function () {
+      expect(parse('a === 233 ? 233 : 234')({ a: 233 })).to.be.equal(233);
+      expect(parse('a === 233 ? 233 : 234')({ a: 234 })).to.be.equal(234);
+    });
+
+    it('parses OR with higher precedence than ternary', function () {
+      expect(parse('0 || 1 ? 0 || 2 : 0 || 3')()).to.equal(2);
+    });
+
+    it('parses nested ternaries', function () {
+      const scope = { a: 235, b: 234, c: 233 };
+      expect(parse('a === 233 ? b === 233 ? "a and b" : "a" : c === 233 ? "c" : "none"')(scope)).to.equal('c');
+    });
+
+    it('parses parentheses altering precedence order', function () {
+      expect(parse('3 * (99 + 1)')()).to.equal(300);
+      expect(parse('false && (true || true)')()).to.be.false;
+      expect(parse('-((a % 233) === 0 ? 1 : 2)')({ a: 233 })).to.equal(-1);
+    });
+  });
+
+  describe('Statements', function () {
+    it('parses several statements', function () {
+      const scope = {};
+      parse('a = 1; b = 2; c = 3')(scope);
+      expect(scope).to.deep.equal({ a: 1, b: 2, c: 3 });
+    });
+
+    it('returns the value of the last statements', function () {
+      expect(parse('a = 1; b = 2; a + b')({})).to.equal(3);
+    });
   });
 });

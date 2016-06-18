@@ -175,7 +175,7 @@ class Lexer {
         this.readNumber();
       } else if (_.includes('\'"', ch)) {
         this.readString(ch);
-      } else if (_.includes('[],{}:.()', ch)) {
+      } else if (_.includes('[],{}:.()?;', ch)) {
         this.tokens.push({
           text: ch
         });
@@ -225,11 +225,12 @@ type ASTNode = ASTProgramNode
   | ASTAssignmentExpressionNode
   | ASTUnaryExpressionNode
   | ASTBinaryExpressionNode
-  | ASTLogicalExpressionNode;
+  | ASTLogicalExpressionNode
+  | ASTConditionalExpressionNode;
 
 type ASTProgramNode = {
   type: 'Program',
-  body: ASTNode
+  body: ASTNode[]
 };
 
 type ASTLiteralNode = {
@@ -306,6 +307,13 @@ type ASTLogicalExpressionNode = {
   right: ASTNode
 };
 
+type ASTConditionalExpressionNode = {
+  type: 'ConditionalExpression',
+  test: ASTNode,
+  consequent: ASTNode,
+  alternate: ASTNode
+};
+
 const ASTNodeType = {
   Program: 'Program',
   Literal: 'Literal',
@@ -319,7 +327,8 @@ const ASTNodeType = {
   AssignmentExpression: 'AssignmentExpression',
   UnaryExpression: 'UnaryExpression',
   BinaryExpression: 'BinaryExpression',
-  LogicalExpression: 'LogicalExpression'
+  LogicalExpression: 'LogicalExpression',
+  ConditionalExpression: 'ConditionalExpression'
 };
 
 const LanguageConstants: { [key: string]: (ASTThisExpressionNode | ASTLiteralNode) } = {
@@ -361,13 +370,20 @@ class AST {
     }
     return token;
   }
+
   ast(text): ASTNode {
     this.tokens = this.lexer.lex(text);
     return this.program();
   }
 
   program(): ASTProgramNode {
-    return { type: ASTNodeType.Program, body: this.assignment() };
+    const body: ASTNode[] = [];
+    do {
+      if (this.tokens.length) {
+        body.push(this.assignment());
+      }
+    } while (this.expect(';'));
+    return { type: ASTNodeType.Program, body };
   }
 
   computedMemberExpression(object: ASTNode): ASTMemberExpressionNode {
@@ -406,9 +422,9 @@ class AST {
   }
 
   assignment(): ASTNode {
-    const left = this.logicalOR();
+    const left = this.ternary();
     if (this.expect('=')) {
-      const right = this.logicalOR();
+      const right = this.ternary();
       return {
         type: ASTNodeType.AssignmentExpression,
         left, right
@@ -419,7 +435,10 @@ class AST {
 
   primary(): ASTNode {
     let primary: ASTNode;
-    if (this.expect('[')) {
+    if (this.expect('(')) {
+      primary = this.assignment();
+      this.consume(')');
+    } else if (this.expect('[')) {
       primary = this.arrayDeclaration();
     } else if (this.expect('{')) {
       primary = this.object();
@@ -591,6 +610,21 @@ class AST {
     }
     return left;
   }
+
+  ternary(): ASTNode {
+    const test = this.logicalOR();
+    if (this.expect('?')) {
+      const consequent = this.assignment();
+      if (this.consume(':')) {
+        const alternate = this.assignment();
+        return {
+          type: ASTNodeType.ConditionalExpression,
+          test, consequent, alternate
+        };
+      }
+    }
+    return test;
+  }
 }
 
 function ensureSafeMemberName(name: string) {
@@ -699,7 +733,10 @@ class ASTCompiler {
       case ASTNodeType.Literal:
         return escape(ast.value);
       case ASTNodeType.Program:
-        this.state.body.push(`return ${this.recurse(ast.body)};`);
+        _.each(_.initial(ast.body), stmt => {
+          this.state.body.push(this.recurse(stmt), ';');
+        });
+        this.state.body.push(`return ${this.recurse(_.last(ast.body))};`);
         break;
       case ASTNodeType.ArrayExpression:
         const elements = _.map(ast.elements, element => this.recurse(element));
@@ -819,6 +856,15 @@ class ASTCompiler {
         this.state.body.push(ASTCompiler.assign(varId, this.recurse(ast.left)));
         this.if_(ast.operator === '&&' ? varId : ASTCompiler.not(varId),
           ASTCompiler.assign(varId, this.recurse(ast.right)));
+        return varId;
+      case ASTNodeType.ConditionalExpression:
+        varId = this.nextId();
+        const testId = this.nextId();
+        this.state.body.push(ASTCompiler.assign(testId, this.recurse(ast.test)));
+        this.if_(testId,
+          ASTCompiler.assign(varId, this.recurse(ast.consequent)));
+        this.if_(ASTCompiler.not(testId),
+          ASTCompiler.assign(varId, this.recurse(ast.alternate)));
         return varId;
       default:
         throw new Error('Unknown ASTNode type');
