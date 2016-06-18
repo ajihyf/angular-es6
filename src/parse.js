@@ -36,7 +36,16 @@ const OperatorsMap: { [key: string]: true } = {
   '-': true,
   '*': true,
   '/': true,
-  '%': true
+  '%': true,
+  '=': true,
+  '==': true,
+  '!=': true,
+  '===': true,
+  '!==': true,
+  '<': true,
+  '>': true,
+  '<=': true,
+  '>=': true
 };
 
 const stringEscapeRegex: RegExp = /[^ a-zA-Z0-9]/g;
@@ -164,7 +173,7 @@ class Lexer {
         this.readNumber();
       } else if (_.includes('\'"', ch)) {
         this.readString(ch);
-      } else if (_.includes('[],{}:.()=', ch)) {
+      } else if (_.includes('[],{}:.()', ch)) {
         this.tokens.push({
           text: ch
         });
@@ -174,10 +183,17 @@ class Lexer {
       } else if (isWhiteSpace(ch)) {
         this.index++;
       } else {
-        const op = OperatorsMap[ch];
-        if (op) {
-          this.tokens.push({ text: ch });
-          this.index++;
+        const nextStrings: Array<string> = [ch];
+        [1, 2].forEach(offset => {
+          const nextChars = this.peek(offset);
+          if (nextChars) {
+            nextStrings.push(ch + nextChars);
+          }
+        });
+        const findOp: ?string = _.findLast(nextStrings, chars => OperatorsMap[chars]);
+        if (findOp) {
+          this.tokens.push({ text: findOp });
+          this.index += findOp.length;
         } else {
           throw new Error(`Unexpected next character: ${ch}`);
         }
@@ -356,9 +372,9 @@ class AST {
   }
 
   assignment(): ASTNode {
-    const left = this.additive();
+    const left = this.equality();
     if (this.expect('=')) {
-      const right = this.additive();
+      const right = this.equality();
       return {
         type: ASTNodeType.AssignmentExpression,
         left, right
@@ -505,6 +521,34 @@ class AST {
         operator: token.text,
         left: left,
         right: this.multiplicative()
+      };
+    }
+    return left;
+  }
+
+  equality(): ASTNode {
+    let left: ASTNode = this.relational();
+    let token: ?LexToken;
+    while ((token = this.expect('==', '!=', '===', '!=='))) {
+      left = {
+        type: ASTNodeType.BinaryExpression,
+        left: left,
+        right: this.relational(),
+        operator: token.text
+      };
+    }
+    return left;
+  }
+
+  relational(): ASTNode {
+    let left: ASTNode = this.additive();
+    let token: ?LexToken;
+    while ((token = this.expect('<', '>', '>=', '<='))) {
+      left = {
+        type: ASTNodeType.BinaryExpression,
+        left: left,
+        right: this.additive(),
+        operator: token.text
       };
     }
     return left;

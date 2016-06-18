@@ -577,5 +577,28 @@ describe('Parse', function () {
       expect(parse('a - 3')()).to.equal(-3);
       expect(parse('3 - a')()).to.equal(3);
     });
+
+    it('parses relational operators', function () {
+      expect(parse('1 < 2')()).to.be.true;
+      expect(parse('1 > 2')()).to.be.false;
+      expect(parse('1 <= 2')()).to.be.true;
+      expect(parse('1 >= 2')()).to.be.false;
+      expect(parse('2 >= 2')()).to.be.true;
+      expect(parse('2 <= 2')()).to.be.true;
+    });
+
+    it('parses equality opertors', function () {
+      expect(parse('233 == 233')()).to.be.true;
+      expect(parse('233 == "233"')()).to.be.true;
+      expect(parse('233 != 233')()).to.be.false;
+      expect(parse('233 != "233"')()).to.be.false;
+      expect(parse('233 === 233')()).to.be.true;
+      expect(parse('233 === "233"')()).to.be.false;
+      expect(parse('233 !== 233')()).to.be.false;
+    });
+
+    it('parses relations on a higher precedence than equality', function () {
+      expect(parse('2 === "2" > 2 === "2"')()).to.be.false;
+    });
   });
 });
