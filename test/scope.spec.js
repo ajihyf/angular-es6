@@ -272,7 +272,7 @@ describe('Scope', function () {
       expect(listenerFn).to.have.been.calledOnce;
     });
 
-    it('allows destroying multiple __watches during digest', function () {
+    it('allows destroying multiple _watches during digest', function () {
       (scope: any).someValue = 233;
       const listenerFn = sinon.spy();
       let destroyWatch1, destroyWatch2;
