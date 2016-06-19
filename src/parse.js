@@ -274,7 +274,7 @@ type ASTMemberExpressionNode = {
   type: 'MemberExpression',
   object: ASTNode,
   property: ASTIdentifierNode,
-  computed: false
+  computed?: false
 };
 
 type ASTCallExpressionNode = {
@@ -285,7 +285,8 @@ type ASTCallExpressionNode = {
 } | {
   type: 'CallExpression',
   callee: ASTNode,
-  arguments: ASTNode[]
+  arguments: ASTNode[],
+  filter?: false
 };
 
 type ASTAssignmentExpressionNode = {
@@ -861,7 +862,6 @@ class ASTCompiler {
         return varId;
       case ASTNodeType.CallExpression:
         if (ast.filter) {
-          // $FlowIssue
           const callee = this.filter(ast.callee.name);
           const args = _.map(ast.arguments, arg => this.recurse(arg));
           return `${callee}(${args})`;
