@@ -1,5 +1,6 @@
 /* @flow */
 import _ from 'lodash';
+import { filter } from './filter';
 
 function isNumber(ch: ?string): boolean {
   if (ch == null) return false;
@@ -47,7 +48,8 @@ const OperatorsMap: { [key: string]: true } = {
   '<=': true,
   '>=': true,
   '&&': true,
-  '||': true
+  '||': true,
+  '|': true
 };
 
 const stringEscapeRegex: RegExp = /[^ a-zA-Z0-9]/g;
@@ -277,6 +279,11 @@ type ASTMemberExpressionNode = {
 
 type ASTCallExpressionNode = {
   type: 'CallExpression',
+  callee: ASTIdentifierNode,
+  arguments: ASTNode[],
+  filter: true
+} | {
+  type: 'CallExpression',
   callee: ASTNode,
   arguments: ASTNode[]
 };
@@ -380,7 +387,7 @@ class AST {
     const body: ASTNode[] = [];
     do {
       if (this.tokens.length) {
-        body.push(this.assignment());
+        body.push(this.filter());
       }
     } while (this.expect(';'));
     return { type: ASTNodeType.Program, body };
@@ -436,7 +443,7 @@ class AST {
   primary(): ASTNode {
     let primary: ASTNode;
     if (this.expect('(')) {
-      primary = this.assignment();
+      primary = this.filter();
       this.consume(')');
     } else if (this.expect('[')) {
       primary = this.arrayDeclaration();
@@ -625,6 +632,19 @@ class AST {
     }
     return test;
   }
+
+  filter(): ASTNode {
+    let left: ASTNode = this.assignment();
+    if (this.expect('|')) {
+      left = {
+        type: ASTNodeType.CallExpression,
+        callee: this.identifier(),
+        arguments: [left],
+        filter: true
+      };
+    }
+    return left;
+  }
 }
 
 function ensureSafeMemberName(name: string) {
@@ -677,7 +697,8 @@ function isDefined<U, V>(value: U, defaultValue: V): U | V {
 type ASTCompilerState = {
   body: string[],
   nextId: number,
-  vars: string[]
+  vars: string[],
+  filters: { [k: string]: string }
 };
 
 type CallContext = {
@@ -696,10 +717,11 @@ class ASTCompiler {
 
   compile(text: string): ParsedFunction {
     const ast: ASTNode = this.astBuilder.ast(text);
-    this.state = { body: [], nextId: 0, vars: [] };
+    this.state = { body: [], nextId: 0, vars: [], filters: {} };
     this.recurse(ast);
     // s means scope, l means locals
     const fnString = `
+    ${this.filterPrefix()}
     var fn = function(s, l) {
       ${this.state.vars.length ? `var ${this.state.vars.join(',')};` : ''}
       ${this.state.body.join('')}
@@ -711,14 +733,33 @@ class ASTCompiler {
       'ensureSafeMemberName',
       'ensureSafeObject',
       'ensureSafeFunction',
+      'filter',
       'isDefined',
       fnString)(
       ensureSafeMemberName,
       ensureSafeObject,
       ensureSafeFunction,
+      filter,
       isDefined);
     /* eslint-enable no-new-func */
     return (fn: any);
+  }
+
+  filterPrefix(): string {
+    if (_.isEmpty(this.state.filters)) {
+      return '';
+    } else {
+      const parts = _.mapValues(this.state.filters,
+        (varName, filterName) => `${varName} = filter(${escape(filterName)})`);
+      return `var ${parts.join(',')};`;
+    }
+  }
+
+  filter(name: string): string {
+    if (!_.has(this.state.filters, name)) {
+      this.state.filters[name] = this.nextId();
+    }
+    return this.state.filters[name];
   }
 
   nextId(): string {
@@ -814,19 +855,26 @@ class ASTCompiler {
         return varId;
       case ASTNodeType.CallExpression:
         const callContext: CallContext = {};
-        let callee = this.recurse(ast.callee, callContext);
-        const args = _.map(ast.arguments,
-          arg => `ensureSafeObject(${this.recurse(arg)})`);
-        if (callContext.context && callContext.name) {
-          if (callContext.computed) {
-            callee = ASTCompiler.computedMember(callContext.context, callContext.name);
-          } else {
-            callee = ASTCompiler.nonComputedMember(callContext.context, callContext.name);
+        if (ast.filter) {
+          // $FlowIssue
+          const callee = this.filter(ast.callee.name);
+          const args = _.map(ast.arguments, arg => this.recurse(arg));
+          return `${callee}(${args})`;
+        } else {
+          let callee = this.recurse(ast.callee, callContext);
+          const args = _.map(ast.arguments,
+            arg => `ensureSafeObject(${this.recurse(arg)})`);
+          if (callContext.context && callContext.name) {
+            if (callContext.computed) {
+              callee = ASTCompiler.computedMember(callContext.context, callContext.name);
+            } else {
+              callee = ASTCompiler.nonComputedMember(callContext.context, callContext.name);
+            }
+            this.addEnsureSafeObject(callContext.context);
           }
-          this.addEnsureSafeObject(callContext.context);
+          this.addEnsureSafeFunction(callee);
+          return `${callee} && ensureSafeObject(${callee}(${args.join(',')}))`;
         }
-        this.addEnsureSafeFunction(callee);
-        return `${callee} && ensureSafeObject(${callee}(${args.join(',')}))`;
       case ASTNodeType.AssignmentExpression:
         const leftContext: CallContext = {};
         this.recurse(ast.left, leftContext, true);

@@ -1,11 +1,14 @@
 /* @flow */
 /* eslint-env mocha */
-import parse from '../src/parse';
 import { expect } from 'chai';
 import _ from 'lodash';
 import sinon from 'sinon';
+import parse from '../src/parse';
+import { register, clear } from '../src/filter';
 
 describe('Parse', function () {
+  afterEach(clear);
+
   it('will parse null', function () {
     const fn = parse('null');
     expect(fn()).to.be.null;
@@ -631,7 +634,7 @@ describe('Parse', function () {
     });
 
     it('parses AND with a higher precedence than OR', function () {
-      expect(parse('false && true || true')()).to.be.true;
+      expect(parse('true || false && true')()).to.be.true;
     });
 
     it('parses equality with a higher precedence than OR', function () {
@@ -672,6 +675,13 @@ describe('Parse', function () {
 
     it('returns the value of the last statements', function () {
       expect(parse('a = 1; b = 2; a + b')({})).to.equal(3);
+    });
+  });
+
+  describe('Filters', function () {
+    it('can parse filter expressions', function () {
+      register('uppercase', () => (str: string) => str.toUpperCase());
+      expect(parse('str | uppercase')({ str: 'Hello' })).to.equal('HELLO');
     });
   });
 });
