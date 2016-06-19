@@ -749,7 +749,7 @@ class ASTCompiler {
     if (_.isEmpty(this.state.filters)) {
       return '';
     } else {
-      const parts = _.mapValues(this.state.filters,
+      const parts = _.map(this.state.filters,
         (varName, filterName) => `${varName} = filter(${escape(filterName)})`);
       return `var ${parts.join(',')};`;
     }
@@ -757,14 +757,16 @@ class ASTCompiler {
 
   filter(name: string): string {
     if (!_.has(this.state.filters, name)) {
-      this.state.filters[name] = this.nextId();
+      this.state.filters[name] = this.nextId(true);
     }
     return this.state.filters[name];
   }
 
-  nextId(): string {
+  nextId(skip: boolean = false): string {
     const id = `$$vv${this.state.nextId++}`;
-    this.state.vars.push(id);
+    if (!skip) {
+      this.state.vars.push(id);
+    }
     return id;
   }
 
@@ -854,13 +856,13 @@ class ASTCompiler {
         }
         return varId;
       case ASTNodeType.CallExpression:
-        const callContext: CallContext = {};
         if (ast.filter) {
           // $FlowIssue
           const callee = this.filter(ast.callee.name);
           const args = _.map(ast.arguments, arg => this.recurse(arg));
           return `${callee}(${args})`;
         } else {
+          const callContext: CallContext = {};
           let callee = this.recurse(ast.callee, callContext);
           const args = _.map(ast.arguments,
             arg => `ensureSafeObject(${this.recurse(arg)})`);
