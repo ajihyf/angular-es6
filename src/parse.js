@@ -635,13 +635,17 @@ class AST {
 
   filter(): ASTNode {
     let left: ASTNode = this.assignment();
-    if (this.expect('|')) {
+    while (this.expect('|')) {
+      const args: ASTNode[] = [left];
       left = {
         type: ASTNodeType.CallExpression,
         callee: this.identifier(),
-        arguments: [left],
+        arguments: args,
         filter: true
       };
+      while (this.expect(':')) {
+        args.push(this.assignment());
+      }
     }
     return left;
   }

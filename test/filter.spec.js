@@ -1,13 +1,9 @@
 /* @flow */
 /* eslint-env mocha */
 import { expect } from 'chai';
-import _ from 'lodash';
-import sinon from 'sinon';
-import { register, filter, clear } from '../src/filter';
+import { register, filter } from '../src/filter';
 
 describe('filter', function () {
-  afterEach(clear);
-
   it('can be registered and obtained', function () {
     const myFilter = () => {};
     const myFilterFactory = () => myFilter;

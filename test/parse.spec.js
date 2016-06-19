@@ -4,11 +4,9 @@ import { expect } from 'chai';
 import _ from 'lodash';
 import sinon from 'sinon';
 import parse from '../src/parse';
-import { register, clear } from '../src/filter';
+import { register } from '../src/filter';
 
 describe('Parse', function () {
-  afterEach(clear);
-
   it('will parse null', function () {
     const fn = parse('null');
     expect(fn()).to.be.null;
@@ -682,6 +680,22 @@ describe('Parse', function () {
     it('can parse filter expressions', function () {
       register('uppercase', () => (str: string) => str.toUpperCase());
       expect(parse('str | uppercase')({ str: 'Hello' })).to.equal('HELLO');
+    });
+
+    it('can parse chained filter expressions', function () {
+      register('uppercase', () => (str: string) => str.toUpperCase());
+      register('bracket', () => (str: string) => `(${str})`);
+      expect(parse('str | uppercase | bracket')({ str: 'Hello' })).to.equal('(HELLO)');
+    });
+
+    it('can pass an additional argument to filters', function () {
+      register('repeat', () => _.repeat);
+      expect(parse('str | repeat:3')({ str: 'hello' })).to.equal('hellohellohello');
+    });
+
+    it('can pass multiple additional arguments to filters', function () {
+      register('surround', () => (str: string, left: string, right: string) => left + str + right);
+      expect(parse('str | surround:"*":"!"')({ str: 'hello' })).to.equal('*hello!');
     });
   });
 });

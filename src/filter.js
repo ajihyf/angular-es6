@@ -1,9 +1,9 @@
 /* @flow */
 import _ from 'lodash';
 
-type FilterFunction = (value: any) => any;
+type FilterFunction = (item: any, ...value: any) => any;
 type FiltersMap = { [key: string]: FilterFunction };
-type FactoryFunction = CallWith<any, FilterFunction>;
+type FactoryFunction = (u: any) => FilterFunction;
 type FactoryMap = { [key: string]: FactoryFunction };
 
 let filters: FiltersMap = {};
@@ -23,8 +23,4 @@ function filter(name: string): FilterFunction {
   return filters[name];
 }
 
-function clear() {
-  filters = {};
-}
-
-export { register, filter, clear };
+export { register, filter };
