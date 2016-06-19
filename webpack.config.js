@@ -4,7 +4,7 @@ const LodashModuleReplacementPlugin = require('lodash-webpack-plugin');
 const env = process.env.NODE_ENV || 'development';
 
 const plugins = [
-  new LodashModuleReplacementPlugin(),
+  new LodashModuleReplacementPlugin({ 'collections': true }),
   new webpack.optimize.OccurenceOrderPlugin()
 ];
 

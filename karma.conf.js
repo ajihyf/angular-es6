@@ -41,7 +41,7 @@ module.exports = function (config) {
     webpack: {
       devtool: 'inline-source-map',
       plugins: [
-        new LodashModuleReplacementPlugin()
+        new LodashModuleReplacementPlugin({ 'collections': true })
       ],
       module: {
         loaders: [
