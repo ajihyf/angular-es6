@@ -13,8 +13,8 @@
   "scripts": {
     "lint": "eslint src test",
     "flow": "flow check",
-    "test": "npm run lint && npm run flow && karma start karma.conf.js --single-run",
-    "test:watch": "karma start karma.conf.js --auto-watch",
+    "test": "npm run lint && npm run flow && cross-env NODE_ENV=test karma start karma.conf.js --single-run",
+    "test:watch": "cross-env NODE_ENV=test karma start karma.conf.js --auto-watch",
     "build": "npm run test && cross-env NODE_ENV=development webpack src/bootstrap.js build/angular.js",
     "build:minified": "npm run test && cross-env NODE_ENV=production webpack src/bootstrap.js build/angular.min.js"
   },

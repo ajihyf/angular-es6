@@ -1,4 +1,4 @@
-const LodashModuleReplacementPlugin = require('lodash-webpack-plugin');
+const webpackConfig = require('./webpack.config.js');
 
 module.exports = function (config) {
   config.set({
@@ -38,30 +38,7 @@ module.exports = function (config) {
       output: 'autowatch'
     },
     singleRun: false,
-    webpack: {
-      devtool: 'inline-source-map',
-      plugins: [
-        new LodashModuleReplacementPlugin({ 'collections': true })
-      ],
-      module: {
-        loaders: [
-          {
-            test: /\.js$/,
-            loader: 'babel',
-            exclude: /node_modules/,
-            query: {
-              cacheDirectory: true
-            }
-          }
-        ]
-      },
-      resolve: {
-        extensions: ['', '.js'],
-        modulesDirectories: [
-          'node_modules'
-        ]
-      }
-    },
+    webpack: webpackConfig,
     webpackServer: {
       noInfo: true
     }
