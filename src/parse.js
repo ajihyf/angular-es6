@@ -379,7 +379,7 @@ class AST {
     return token;
   }
 
-  ast(text): ASTNode {
+  ast(text): ASTProgramNode {
     this.tokens = this.lexer.lex(text);
     return this.program();
   }
@@ -650,6 +650,53 @@ class AST {
     }
     return left;
   }
+
+  static isLiteral(ast: ASTProgramNode): boolean {
+    const body = ast.body;
+    return body.length === 0 ||
+      (body.length === 1 &&
+          (body[0].type === ASTNodeType.Literal ||
+            body[0].type === ASTNodeType.ArrayExpression ||
+            body[0].type === ASTNodeType.ObjectExpression));
+  }
+
+  static isConstant(ast: ASTNode): boolean {
+    switch (ast.type) {
+      case ASTNodeType.Literal:
+        return true;
+      case ASTNodeType.ThisExpression:
+      case ASTNodeType.Identifier:
+        return false;
+      case ASTNodeType.Program:
+        return _.every(ast.body, AST.isConstant);
+      case ASTNodeType.ArrayExpression:
+        return _.every(ast.elements, AST.isConstant);
+      case ASTNodeType.ObjectExpression:
+        return _.every(ast.properties, property => AST.isConstant(property.value));
+      case ASTNodeType.MemberExpression:
+        const objectConstant = AST.isConstant(ast.object);
+        if (ast.computed) {
+          return objectConstant && AST.isConstant(ast.property);
+        }
+        return objectConstant;
+      case ASTNodeType.CallExpression:
+        if (ast.filter) {
+          return _.every(ast.arguments, AST.isConstant);
+        }
+        return false;
+      case ASTNodeType.AssignmentExpression:
+      case ASTNodeType.BinaryExpression:
+      case ASTNodeType.LogicalExpression:
+        return AST.isConstant(ast.left) && AST.isConstant(ast.right);
+      case ASTNodeType.UnaryExpression:
+        return AST.isConstant(ast.argument);
+      case ASTNodeType.ConditionalExpression:
+        return AST.isConstant(ast.test) &&
+            AST.isConstant(ast.consequent) && AST.isConstant(ast.alternate);
+      default:
+        return true;
+    }
+  }
 }
 
 function ensureSafeMemberName(name: string) {
@@ -721,7 +768,7 @@ class ASTCompiler {
   }
 
   compile(text: string): ParsedFunction {
-    const ast: ASTNode = this.astBuilder.ast(text);
+    const ast: ASTProgramNode = this.astBuilder.ast(text);
     this.state = { body: [], nextId: 0, vars: [], filters: {} };
     this.recurse(ast);
     // s means scope, l means locals
@@ -734,7 +781,7 @@ class ASTCompiler {
     return fn;
     `;
     /* eslint-disable no-new-func */
-    const fn = new Function(
+    const fn: ParsedFunction = new Function(
       'ensureSafeMemberName',
       'ensureSafeObject',
       'ensureSafeFunction',
@@ -747,7 +794,9 @@ class ASTCompiler {
       filter,
       isDefined);
     /* eslint-enable no-new-func */
-    return (fn: any);
+    fn.literal = AST.isLiteral(ast);
+    fn.constant = AST.isConstant(ast);
+    return fn;
   }
 
   filterPrefix(): string {
@@ -995,5 +1044,10 @@ function parse(expr?: string | Function): ParsedFunction {
   }
 }
 
-type ParsedFunction = (scope?: any, locals?: any) => any;
+interface ParsedFunction {
+  (scope?: any, locals?: any): any;
+  literal?: boolean,
+  constant?: boolean
+}
+
 export default parse;
