@@ -1031,12 +1031,21 @@ class Parser {
   }
 }
 
+type WatchDelegateFn = (scope: any, listenerFn?: Function, valueEq?: boolean, watchFn: ParsedFunction) => any;
+
 function parse(expr?: string | Function): ParsedFunction {
   switch (typeof expr) {
     case 'string':
       const lexer = new Lexer();
       const parser = new Parser(lexer);
-      return parser.parse(expr);
+      let oneTime = false;
+      if (expr.charAt(0) === ':' && expr.charAt(1) === ':') {
+        oneTime = true;
+        expr = expr.substring(2);
+      }
+      const parsedFn = parser.parse(expr);
+      parsedFn.oneTime = oneTime;
+      return parsedFn;
     case 'function':
       return expr;
     default:
@@ -1047,7 +1056,9 @@ function parse(expr?: string | Function): ParsedFunction {
 interface ParsedFunction {
   (scope?: any, locals?: any): any;
   literal?: boolean,
-  constant?: boolean
+  constant?: boolean,
+  oneTime?: boolean,
+  __watchDelegate?: WatchDelegateFn
 }
 
 export default parse;

@@ -1678,4 +1678,76 @@ describe('Scope', function () {
       expect(listenerFn).to.have.been.calledTwice;
     });
   });
+
+  describe('Optimizing', function () {
+    it('removes constant watches after first invocation', function () {
+      scope._watch('[0, 1, 2]', () => {});
+      scope._digest();
+
+      expect(scope.__watchers).to.be.empty;
+    });
+
+    it('accepts one-time watches', function () {
+      let theValue;
+      (scope: any).someValue = 233;
+      scope._watch('::someValue', newValue => { theValue = newValue; });
+      scope._digest();
+
+      expect(theValue).to.equal(233);
+    });
+
+    it('removes one-time watchers after first invocation', function () {
+      (scope: any).someValue = 233;
+      scope._watch('::someValue', () => {});
+      scope._digest();
+
+      expect(scope.__watchers).to.be.empty;
+    });
+
+    it('does not remove one-time-watches until value is defined', function () {
+      scope._watch('::someValue', () => {});
+      scope._digest();
+      expect(scope.__watchers).to.have.lengthOf(1);
+
+      (scope: any).someValue = 233;
+      scope._digest();
+      expect(scope.__watchers).to.have.lengthOf(0);
+    });
+
+    it('does not remove one-time-watches until value stays defined', function () {
+      (scope: any).someValue = 233;
+
+      scope._watch('::someValue', () => {});
+      const unwatchDeleter = scope._watch('::someValue', () => { delete (scope: any).someValue; });
+
+      scope._digest();
+      expect(scope.__watchers).to.have.lengthOf(2);
+
+      (scope: any).someValue = 233;
+      unwatchDeleter();
+      expect(scope.__watchers).to.have.lengthOf(1);
+      scope._digest();
+      expect(scope.__watchers).to.have.lengthOf(0);
+    });
+
+    it('does not remove one-time-watches until all array items defined', function () {
+      scope._watch('::[0, 1, someValue]', () => {}, true);
+      scope._digest();
+      expect(scope.__watchers).to.have.lengthOf(1);
+
+      (scope: any).someValue = 233;
+      scope._digest();
+      expect(scope.__watchers).to.have.lengthOf(0);
+    });
+
+    it('does not remove one-time-watches until value stays defined', function () {
+      scope._watch('::{a: 1, b: someValue}', () => {}, true);
+      scope._digest();
+      expect(scope.__watchers).to.have.lengthOf(1);
+
+      (scope: any).someValue = 233;
+      scope._digest();
+      expect(scope.__watchers).to.have.lengthOf(0);
+    });
+  });
 });

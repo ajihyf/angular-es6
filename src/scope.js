@@ -47,6 +47,41 @@ type AcceptableExpr = CallWith<Scope, any> | string;
 const initWatchVal: AnyFunction = () => {};
 const maxTTL: number = 10; // time to live
 
+function constantWatchDelegate(scope: Scope, listnerFn?: ListenerFunction, valueEq?: boolean, watchFn: CallWith<Scope, any>) {
+  const unwatch = scope._watch(() => watchFn(scope),
+  (...args) => {
+    if (_.isFunction(listnerFn)) {
+      // $FlowIssue
+      listnerFn.call(scope, ...args);
+    }
+    unwatch();
+  }, valueEq);
+  return unwatch;
+}
+
+function isAnyUndefined(val: any): boolean {
+  return _.some(val, _.isUndefined);
+}
+
+function oneTimeWatchDelegate(scope: Scope, listnerFn?: ListenerFunction, valueEq?: boolean, watchFn: CallWith<Scope, any>, literal?: boolean) {
+  let lastValue;
+  let testFn = literal ? isAnyUndefined : _.isUndefined;
+  const unwatch = scope._watch(() => watchFn(scope),
+  (newValue, ...args) => {
+    lastValue = newValue;
+    if (_.isFunction(listnerFn)) {
+      // $FlowIssue
+      listnerFn.call(scope, newValue, ...args);
+    }
+    scope.__postDigest(() => {
+      if (!testFn(lastValue)) {
+        unwatch();
+      }
+    });
+  }, valueEq);
+  return unwatch;
+}
+
 class Scope {
   __watchers: Watcher[] = [];
   __lastDirtyWatch: ?Watcher = null;
@@ -203,8 +238,16 @@ class Scope {
   }
 
   _watch(watchFn: AcceptableExpr, listenerFn?: ListenerFunction<any>, valueEq?: boolean = false): AnyFunction {
+    const parsedWatchFn = parse(watchFn);
+
+    if (parsedWatchFn.constant) {
+      return constantWatchDelegate(this, listenerFn, valueEq, parsedWatchFn);
+    } else if (parsedWatchFn.oneTime) {
+      return oneTimeWatchDelegate(this, listenerFn, valueEq, parsedWatchFn, parsedWatchFn.literal);
+    }
+
     const watcher: Watcher = {
-      watchFn: parse(watchFn),
+      watchFn: parsedWatchFn,
       listenerFn: listenerFn || (() => {}),
       valueEq,
       last: initWatchVal
