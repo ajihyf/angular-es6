@@ -292,6 +292,14 @@ describe('Scope', function () {
       scope._digest();
       expect(listenerFn).to.have.not.been.called;
     });
+
+    it('accepts expressions', function () {
+      let theValue;
+      (scope: any).someValue = 233;
+      scope._watch('someValue', newValue => { theValue = newValue; });
+      scope._digest();
+      expect(theValue).to.equal(233);
+    });
   });
 
   describe('#_eval', function () {
@@ -310,6 +318,10 @@ describe('Scope', function () {
 
       expect(result).to.equal(235);
     });
+
+    it('accepts expressions', function () {
+      expect(scope._eval('233')).to.equal(233);
+    });
   });
 
   describe('#_apply', function () {
@@ -327,6 +339,11 @@ describe('Scope', function () {
 
       scope._apply(scope => { (scope: any).someValue = 235; });
       expect(listenerFn).to.have.been.calledTwice;
+    });
+
+    it('accepts expressions', function () {
+      (scope: any).aFn = _.constant(233);
+      expect(scope._apply('aFn()')).to.equal(233);
     });
   });
 
@@ -409,6 +426,18 @@ describe('Scope', function () {
         expect(listernerFn).to.have.been.calledOnce;
         done();
       }, 10);
+    });
+
+    it('accepts expressions in _evalAsync', function (done) {
+      const spy = sinon.spy();
+      (scope: any).aFn = spy;
+
+      scope._evalAsync('aFn()');
+
+      scope.__postDigest(() => {
+        expect(spy).to.have.been.calledOnce;
+        done();
+      });
     });
   });
 
@@ -975,6 +1004,14 @@ describe('Scope', function () {
       scope._digest();
       expect(gotNewValue).to.deep.equal([0, 1, 2, 3]);
       expect(gotOldValue).to.deep.equal([0, 1, 2]);
+    });
+
+    it('accepts expressions for watch functions', function () {
+      let theValue;
+      (scope: any).arr = [0, 1, 2];
+      scope._watchCollection('arr', newValue => { theValue = newValue; });
+      scope._digest();
+      expect(theValue).to.deep.equal([0, 1, 2]);
     });
   });
 

@@ -7,6 +7,15 @@ import parse from '../src/parse';
 import { register } from '../src/filter';
 
 describe('Parse', function () {
+  it('returns the function itself when given one', function () {
+    const fn = () => {};
+    expect(parse(fn)).to.equal(fn);
+  });
+
+  it('returns a function when given no argument', function () {
+    expect(parse()).to.be.a('function');
+  });
+
   it('will parse null', function () {
     const fn = parse('null');
     expect(fn()).to.be.null;

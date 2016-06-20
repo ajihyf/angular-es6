@@ -982,10 +982,17 @@ class Parser {
   }
 }
 
-function parse(expr: string): ParsedFunction {
-  const lexer = new Lexer();
-  const parser = new Parser(lexer);
-  return parser.parse(expr);
+function parse(expr?: string | Function): ParsedFunction {
+  switch (typeof expr) {
+    case 'string':
+      const lexer = new Lexer();
+      const parser = new Parser(lexer);
+      return parser.parse(expr);
+    case 'function':
+      return expr;
+    default:
+      return _.noop;
+  }
 }
 
 type ParsedFunction = (scope?: any, locals?: any) => any;

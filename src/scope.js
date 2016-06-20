@@ -1,5 +1,6 @@
 /* @flow */
 import _ from 'lodash';
+import parse from './parse';
 
 function areEqual(newValue: any, oldValue: any, valueEq: boolean) {
   if (valueEq) {
@@ -29,7 +30,7 @@ type Watcher = {
 };
 type AsyncQueueItem = {
   scope: Scope,
-  expression: CallWith<Scope, any>
+  expression: AcceptableExpr
 };
 type ScopeEvent = {
   name: string,
@@ -40,6 +41,8 @@ type ScopeEvent = {
   targetScope: Scope
 };
 type ScopeEventListener = (event: ScopeEvent, ...rest: any[]) => any;
+
+type AcceptableExpr = CallWith<Scope, any> | string;
 
 const initWatchVal: AnyFunction = () => {};
 const maxTTL: number = 10; // time to live
@@ -136,7 +139,7 @@ class Scope {
     this.__postDigestQueue.push(fn);
   }
 
-  _apply(expr: CallWith<Scope, any>) {
+  _apply(expr: AcceptableExpr) {
     try {
       this.__beginPhase('_apply');
       return this._eval(expr);
@@ -146,7 +149,7 @@ class Scope {
     }
   }
 
-  _applyAsync(expr: CallWith<Scope, any>) {
+  _applyAsync(expr: AcceptableExpr) {
     this.__applyAsyncQueue.push(() => {
       this._eval(expr);
     });
@@ -181,11 +184,11 @@ class Scope {
     this.__phase = null;
   }
 
-  _eval(expr: CallWith<Scope, any>, locals?: any): any {
-    return expr(this, locals);
+  _eval(expr: AcceptableExpr, locals?: any): any {
+    return parse(expr)(this, locals);
   }
 
-  _evalAsync(expr: CallWith<Scope, any>) {
+  _evalAsync(expr: AcceptableExpr) {
     if (!this.__phase && !this.__asyncQueue.length) {
       setTimeout(() => {
         if (this.__asyncQueue.length) {
@@ -199,9 +202,9 @@ class Scope {
     });
   }
 
-  _watch(watchFn: CallWith<Scope, any>, listenerFn?: ListenerFunction<any>, valueEq?: boolean = false): AnyFunction {
+  _watch(watchFn: AcceptableExpr, listenerFn?: ListenerFunction<any>, valueEq?: boolean = false): AnyFunction {
     const watcher: Watcher = {
-      watchFn,
+      watchFn: parse(watchFn),
       listenerFn: listenerFn || (() => {}),
       valueEq,
       last: initWatchVal
@@ -264,17 +267,18 @@ class Scope {
     };
   }
 
-  _watchCollection(watchFn: CallWith<Scope, any>, listenerFn: ListenerFunction<any>): AnyFunction {
+  _watchCollection(watchFn: AcceptableExpr, listenerFn: ListenerFunction<any>): AnyFunction {
     let newValue, oldValue;
     let changeCount: number = 0;
     let oldLength: number;
     const trackVeryOldValue: boolean = listenerFn.length > 1;
     let veryOldValue;
     let firstRun: boolean = true;
+    const parsedWatchFn = parse(watchFn);
 
     const internalWatchFn: CallWith<Scope, number> = (scope) => {
       let newLength;
-      newValue = watchFn(scope);
+      newValue = parsedWatchFn(scope);
 
       if (_.isObject(newValue)) {
         if (strictIsArrayLike(newValue)) {
