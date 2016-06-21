@@ -4,6 +4,7 @@ import Scope from '../src/scope';
 import { expect } from 'chai';
 import sinon from 'sinon';
 import _ from 'lodash';
+import { register } from '../src/filter';
 
 describe('Scope', function () {
   let scope: Scope;
@@ -1770,5 +1771,23 @@ describe('Scope', function () {
       expect(values).to.have.lengthOf(2);
       expect(values[1]).to.deep.equal([1, 2, 4]);
     });
+  });
+
+  it('allows $stateful filter value change over times', function (done) {
+    register('withTime', () => {
+      return _.extend(v => new Date().toISOString() + ': ' + v, { $stateful: true });
+    });
+
+    const spy = sinon.spy();
+    scope.$watch('233 | withTime', spy);
+    scope.$digest();
+    const value = spy.lastCall.args[0];
+
+    setTimeout(() => {
+      scope.$digest();
+      const newValue = spy.lastCall.args[0];
+      expect(value).to.not.equal(newValue);
+      done();
+    }, 50);
   });
 });

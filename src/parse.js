@@ -327,10 +327,11 @@ class ASTFilterExpressionNode {
   constant: boolean;
   toWatch: ASTNode[];
   constructor(callee: ASTIdentifierNode, args: ASTNode[]) {
-    this.constant = _.every(args, n => n.constant);
+    const stateless = !(filter(callee.name).$stateful);
+    this.constant = stateless && _.every(args, n => n.constant);
     this.callee = callee;
     this.arguments = args;
-    this.toWatch = _.flatMap(args, n => n.toWatch);
+    this.toWatch = stateless ? _.flatMap(args, n => n.toWatch) : [this];
   }
 }
 

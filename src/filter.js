@@ -1,12 +1,16 @@
 /* @flow */
 import _ from 'lodash';
 
-type FilterFunction = (item: any, ...value: any) => any;
+interface FilterFunction {
+  (item: any, ...value: any): any;
+  $stateful?: boolean
+}
+
 type FiltersMap = { [key: string]: FilterFunction };
 type FactoryFunction = (u: any) => FilterFunction;
 type FactoryMap = { [key: string]: FactoryFunction };
 
-let filters: FiltersMap = {};
+const filters: FiltersMap = {};
 
 function register(name: string | FactoryMap, factory?: FactoryFunction): (FilterFunction | FilterFunction[]) {
   if (name != null && typeof name === 'object') {

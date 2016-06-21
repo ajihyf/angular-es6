@@ -118,7 +118,7 @@ describe('Parse', function () {
     });
 
     it('marks filters constant if argument are', function () {
-      register('aFilter', _.identity);
+      register('aFilter', () => _.identity);
       expect(parse('[1, 2, 3] | aFilter').constant).to.be.true;
       expect(parse('[1, 2, a] | aFilter').constant).to.be.false;
       expect(parse('[1, 2, 3] | aFilter:233').constant).to.be.true;
