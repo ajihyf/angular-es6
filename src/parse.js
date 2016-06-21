@@ -776,9 +776,9 @@ class ASTCompiler {
       this.state.functions[inputKey].body.push(`return ${this.recurse(input)};`);
       this.state.inputs.push(inputKey);
     });
-    this.recurse(ast);
     this.state.computing = 'fn';
     this.state.stage = 'main';
+    this.recurse(ast);
     // s means scope, l means locals
     const fnString = `
     ${this.filterPrefix()}

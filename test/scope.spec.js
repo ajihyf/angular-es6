@@ -1768,7 +1768,7 @@ describe('Scope', function () {
       (scope: any).c = 4;
       scope._digest();
       expect(values).to.have.lengthOf(2);
-      expect(values[0]).to.deep.equal([1, 2, 4]);
+      expect(values[1]).to.deep.equal([1, 2, 4]);
     });
   });
 });
