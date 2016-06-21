@@ -4,7 +4,10 @@ const LodashModuleReplacementPlugin = require('lodash-webpack-plugin');
 const env = process.env.NODE_ENV || 'development';
 
 const plugins = [
-  new LodashModuleReplacementPlugin({ 'collections': true })
+  new LodashModuleReplacementPlugin({
+    'collections': true,
+    'flattening': true
+  })
 ];
 
 if (env === 'production') {
