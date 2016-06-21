@@ -231,58 +231,69 @@ type ASTNode = ASTProgramNode
   | ASTConditionalExpressionNode;
 
 type ASTProgramNode = {
+  constant: boolean,
   type: 'Program',
   body: ASTNode[]
 };
 
 type ASTLiteralNode = {
+  constant: boolean,
   type: 'Literal',
   value: any
 };
 
 type ASTArrayExpressionNode = {
+  constant: boolean,
   type: 'ArrayExpression',
   elements: ASTNode[]
 };
 
 type ASTObjectNode = {
+  constant: boolean,
   type: 'ObjectExpression',
   properties: ASTPropertyNode[]
 };
 
 type ASTPropertyNode = {
+  constant: boolean,
   type: 'Property',
   key: ASTLiteralNode | ASTIdentifierNode,
   value: ASTNode
 };
 
 type ASTIdentifierNode = {
+  constant: boolean,
   type: 'Identifier',
   name: string
 };
 
 type ASTThisExpressionNode = {
+  constant: boolean,
   type: 'ThisExpression'
 };
 
 type ASTMemberExpressionNode = {
-  type: 'MemberExpression',
-  object: ASTNode,
-  property: ASTNode,
-  computed: true
-} | {
+  constant: boolean,
   type: 'MemberExpression',
   object: ASTNode,
   property: ASTIdentifierNode,
   computed?: false
+} | {
+  constant: boolean,
+  type: 'MemberExpression',
+  object: ASTNode,
+  property: ASTNode,
+  computed: true
 };
 
 type ASTCallExpressionNode = {
+  constant: boolean,
   type: 'CallExpression',
   callee: ASTIdentifierNode,
   arguments: ASTNode[],
   filter: true
 } | {
+  constant: boolean,
   type: 'CallExpression',
   callee: ASTNode,
   arguments: ASTNode[],
@@ -290,18 +301,21 @@ type ASTCallExpressionNode = {
 };
 
 type ASTAssignmentExpressionNode = {
+  constant: boolean,
   type: 'AssignmentExpression',
   left: ASTNode,
   right: ASTNode
 };
 
 type ASTUnaryExpressionNode = {
+  constant: boolean,
   type: 'UnaryExpression',
   operator: string,
   argument: ASTNode
 };
 
 type ASTBinaryExpressionNode = {
+  constant: boolean,
   type: 'BinaryExpression',
   operator: string,
   left: ASTNode,
@@ -309,6 +323,7 @@ type ASTBinaryExpressionNode = {
 };
 
 type ASTLogicalExpressionNode = {
+  constant: boolean,
   type: 'LogicalExpression',
   operator: string,
   left: ASTNode,
@@ -316,6 +331,7 @@ type ASTLogicalExpressionNode = {
 };
 
 type ASTConditionalExpressionNode = {
+  constant: boolean,
   type: 'ConditionalExpression',
   test: ASTNode,
   consequent: ASTNode,
@@ -340,11 +356,11 @@ const ASTNodeType = {
 };
 
 const LanguageConstants: { [key: string]: (ASTThisExpressionNode | ASTLiteralNode) } = {
-  'this': { type: ASTNodeType.ThisExpression },
-  'null': { type: ASTNodeType.Literal, value: null },
-  'true': { type: ASTNodeType.Literal, value: true },
-  'false': { type: ASTNodeType.Literal, value: false },
-  'undefined': { type: ASTNodeType.Literal, value: undefined }
+  'this': { type: ASTNodeType.ThisExpression, constant: false },
+  'null': { type: ASTNodeType.Literal, value: null, constant: true },
+  'true': { type: ASTNodeType.Literal, value: true, constant: true },
+  'false': { type: ASTNodeType.Literal, value: false, constant: true },
+  'undefined': { type: ASTNodeType.Literal, value: undefined, constant: true }
 };
 
 class AST {
@@ -391,15 +407,18 @@ class AST {
         body.push(this.filter());
       }
     } while (this.expect(';'));
-    return { type: ASTNodeType.Program, body };
+    const constant = _.every(body, n => n.constant);
+    return { type: ASTNodeType.Program, body, constant };
   }
 
   computedMemberExpression(object: ASTNode): ASTMemberExpressionNode {
+    const property: ASTNode = this.primary();
     const primary: ASTMemberExpressionNode = {
       type: ASTNodeType.MemberExpression,
       object,
-      property: this.primary(),
-      computed: true
+      property,
+      computed: true,
+      constant: object.constant && property.constant
     };
     this.consume(']');
     return primary;
@@ -410,7 +429,8 @@ class AST {
       type: ASTNodeType.MemberExpression,
       object,
       property: this.identifier(),
-      computed: false
+      computed: false,
+      constant: object.constant
     };
   }
 
@@ -418,7 +438,8 @@ class AST {
     const callExpression: ASTCallExpressionNode = {
       type: ASTNodeType.CallExpression,
       callee,
-      arguments: []
+      arguments: [],
+      constant: false
     };
     if (!this.peek(')')) {
       do {
@@ -435,7 +456,8 @@ class AST {
       const right = this.ternary();
       return {
         type: ASTNodeType.AssignmentExpression,
-        left, right
+        left, right,
+        constant: left.constant && right.constant
       };
     }
     return left;
@@ -487,12 +509,17 @@ class AST {
         properties.push({
           type: ASTNodeType.Property,
           key,
-          value
+          value,
+          constant: value.constant
         });
       } while (this.expect(','));
     }
     this.consume('}');
-    return { type: ASTNodeType.ObjectExpression, properties };
+    return {
+      type: ASTNodeType.ObjectExpression,
+      properties,
+      constant: _.every(properties, n => n.constant)
+    };
   }
 
   arrayDeclaration(): ASTArrayExpressionNode {
@@ -506,12 +533,16 @@ class AST {
       } while (this.expect(','));
     }
     this.consume(']');
-    return { type: ASTNodeType.ArrayExpression, elements };
+    return {
+      type: ASTNodeType.ArrayExpression,
+      elements,
+      constant: _.every(elements, n => n.constant)
+    };
   }
 
   constant(): ASTLiteralNode {
     const node = this.consume();
-    return { type: ASTNodeType.Literal, value: node.value };
+    return { type: ASTNodeType.Literal, value: node.value, constant: true };
   }
 
   identifier(): ASTIdentifierNode {
@@ -519,16 +550,18 @@ class AST {
     if (!node.identifier) {
       throw new Error(`Tokenize Error: ${node.text} is not an identifier`);
     }
-    return { type: ASTNodeType.Identifier, name: node.text };
+    return { type: ASTNodeType.Identifier, name: node.text, constant: false };
   }
 
   unary(): ASTNode {
     const token = this.expect('+', '!', '-');
     if (token) {
+      const argument = this.unary();
       return {
         type: ASTNodeType.UnaryExpression,
         operator: token.text,
-        argument: this.unary()
+        argument,
+        constant: argument.constant
       };
     } else {
       return this.primary();
@@ -539,11 +572,12 @@ class AST {
     let left: ASTNode = this.unary();
     let token: ?LexToken;
     while ((token = this.expect('*', '/', '%'))) {
+      const right = this.unary();
       left = {
         type: ASTNodeType.BinaryExpression,
         operator: token.text,
-        left: left,
-        right: this.unary()
+        left, right,
+        constant: left.constant && right.constant
       };
     }
     return left;
@@ -553,11 +587,12 @@ class AST {
     let left: ASTNode = this.multiplicative();
     let token: ?LexToken;
     while ((token = this.expect('+', '-'))) {
+      const right = this.multiplicative();
       left = {
         type: ASTNodeType.BinaryExpression,
         operator: token.text,
-        left: left,
-        right: this.multiplicative()
+        left, right,
+        constant: left.constant && right.constant
       };
     }
     return left;
@@ -567,11 +602,12 @@ class AST {
     let left: ASTNode = this.relational();
     let token: ?LexToken;
     while ((token = this.expect('==', '!=', '===', '!=='))) {
+      const right = this.relational();
       left = {
         type: ASTNodeType.BinaryExpression,
-        left: left,
-        right: this.relational(),
-        operator: token.text
+        left, right,
+        operator: token.text,
+        constant: left.constant && right.constant
       };
     }
     return left;
@@ -581,11 +617,12 @@ class AST {
     let left: ASTNode = this.additive();
     let token: ?LexToken;
     while ((token = this.expect('<', '>', '>=', '<='))) {
+      const right = this.additive();
       left = {
         type: ASTNodeType.BinaryExpression,
-        left: left,
-        right: this.additive(),
-        operator: token.text
+        left, right,
+        operator: token.text,
+        constant: left.constant && right.constant
       };
     }
     return left;
@@ -595,11 +632,12 @@ class AST {
     let left: ASTNode = this.equality();
     let token: ?LexToken;
     while ((token = this.expect('&&'))) {
+      const right = this.equality();
       left = {
         type: ASTNodeType.LogicalExpression,
-        left: left,
-        right: this.equality(),
-        operator: token.text
+        left, right,
+        operator: token.text,
+        constant: left.constant && right.constant
       };
     }
     return left;
@@ -609,11 +647,12 @@ class AST {
     let left: ASTNode = this.logicalAND();
     let token: ?LexToken;
     while ((token = this.expect('||'))) {
+      const right = this.logicalAND();
       left = {
         type: ASTNodeType.LogicalExpression,
-        left: left,
-        right: this.logicalAND(),
-        operator: token.text
+        left, right,
+        operator: token.text,
+        constant: left.constant && right.constant
       };
     }
     return left;
@@ -627,7 +666,8 @@ class AST {
         const alternate = this.assignment();
         return {
           type: ASTNodeType.ConditionalExpression,
-          test, consequent, alternate
+          test, consequent, alternate,
+          constant: test.constant && consequent.constant && alternate.constant
         };
       }
     }
@@ -638,15 +678,17 @@ class AST {
     let left: ASTNode = this.assignment();
     while (this.expect('|')) {
       const args: ASTNode[] = [left];
-      left = {
-        type: ASTNodeType.CallExpression,
-        callee: this.identifier(),
-        arguments: args,
-        filter: true
-      };
+      const callee = this.identifier();
       while (this.expect(':')) {
         args.push(this.assignment());
       }
+      left = {
+        type: ASTNodeType.CallExpression,
+        callee,
+        arguments: args,
+        filter: true,
+        constant: _.every(args, n => n.constant)
+      };
     }
     return left;
   }
@@ -658,44 +700,6 @@ class AST {
           (body[0].type === ASTNodeType.Literal ||
             body[0].type === ASTNodeType.ArrayExpression ||
             body[0].type === ASTNodeType.ObjectExpression));
-  }
-
-  static isConstant(ast: ASTNode): boolean {
-    switch (ast.type) {
-      case ASTNodeType.Literal:
-        return true;
-      case ASTNodeType.ThisExpression:
-      case ASTNodeType.Identifier:
-        return false;
-      case ASTNodeType.Program:
-        return _.every(ast.body, AST.isConstant);
-      case ASTNodeType.ArrayExpression:
-        return _.every(ast.elements, AST.isConstant);
-      case ASTNodeType.ObjectExpression:
-        return _.every(ast.properties, property => AST.isConstant(property.value));
-      case ASTNodeType.MemberExpression:
-        const objectConstant = AST.isConstant(ast.object);
-        if (ast.computed) {
-          return objectConstant && AST.isConstant(ast.property);
-        }
-        return objectConstant;
-      case ASTNodeType.CallExpression:
-        if (ast.filter) {
-          return _.every(ast.arguments, AST.isConstant);
-        }
-        return false;
-      case ASTNodeType.AssignmentExpression:
-      case ASTNodeType.BinaryExpression:
-      case ASTNodeType.LogicalExpression:
-        return AST.isConstant(ast.left) && AST.isConstant(ast.right);
-      case ASTNodeType.UnaryExpression:
-        return AST.isConstant(ast.argument);
-      case ASTNodeType.ConditionalExpression:
-        return AST.isConstant(ast.test) &&
-            AST.isConstant(ast.consequent) && AST.isConstant(ast.alternate);
-      default:
-        return true;
-    }
   }
 }
 
@@ -795,7 +799,7 @@ class ASTCompiler {
       isDefined);
     /* eslint-enable no-new-func */
     fn.literal = AST.isLiteral(ast);
-    fn.constant = AST.isConstant(ast);
+    fn.constant = ast.constant;
     return fn;
   }
 
@@ -1031,8 +1035,6 @@ class Parser {
   }
 }
 
-type WatchDelegateFn = (scope: any, listenerFn?: Function, valueEq?: boolean, watchFn: ParsedFunction) => any;
-
 function parse(expr?: string | Function): ParsedFunction {
   switch (typeof expr) {
     case 'string':
@@ -1057,8 +1059,7 @@ interface ParsedFunction {
   (scope?: any, locals?: any): any;
   literal?: boolean,
   constant?: boolean,
-  oneTime?: boolean,
-  __watchDelegate?: WatchDelegateFn
+  oneTime?: boolean
 }
 
 export default parse;
