@@ -4,6 +4,8 @@ const LodashModuleReplacementPlugin = require('lodash-webpack-plugin');
 const env = process.env.NODE_ENV || 'development';
 
 const plugins = [
+  new webpack.optimize.DedupePlugin(),
+  new webpack.optimize.OccurenceOrderPlugin(),
   new LodashModuleReplacementPlugin({
     'collections': true,
     'flattening': true
@@ -11,7 +13,6 @@ const plugins = [
 ];
 
 if (env === 'production') {
-  plugins.push(new webpack.optimize.OccurenceOrderPlugin());
   plugins.push(new webpack.optimize.UglifyJsPlugin());
 }
 
