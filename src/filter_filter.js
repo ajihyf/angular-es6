@@ -5,9 +5,9 @@ import { register } from './filter';
 type Predicate<T> = (u: T) => boolean;
 type Compare<T> = (u: T, v: T) => boolean;
 
-type AccpetedLiteral = Object | string | number | boolean | null;
+type AcceptedLiteral = Object | string | number | boolean | null;
 
-type FilterFilterFunction<T> = (arr: T[], filterExpr: (Predicate<T> | AccpetedLiteral), comparator?: Compare) => T[];
+type FilterFilterFunction<T> = (arr: T[], filterExpr: (Predicate<T> | AcceptedLiteral), comparator?: Compare) => T[];
 
 function deepCompare(actual: any, expected: any, comparator: Compare,
   matchAnyProperty: boolean = false, isWildcard: boolean = false): boolean {
@@ -38,7 +38,7 @@ function deepCompare(actual: any, expected: any, comparator: Compare,
   }
 }
 
-function basicComparator(item: AccpetedLiteral, expected: AccpetedLiteral): boolean {
+function basicComparator(item: AcceptedLiteral, expected: AcceptedLiteral): boolean {
   if (_.isUndefined(item)) {
     return false;
   }
@@ -50,7 +50,7 @@ function basicComparator(item: AccpetedLiteral, expected: AccpetedLiteral): bool
   return itemStr.indexOf(expectedStr) !== -1;
 }
 
-function createPredicateFn(expression: AccpetedLiteral, comparator?: Compare | true): Predicate {
+function createPredicateFn(expression: AcceptedLiteral, comparator?: Compare | true): Predicate {
   const shouldMatchPrimitives = _.isObject(expression) && _.has((expression: any), '$');
   if (comparator === true) {
     comparator = _.isEqual;

@@ -17,13 +17,13 @@ describe('Scope', function () {
     expect((scope: any).someProperty).to.equal(1);
   });
 
-  describe('#_watch', function () {
-    it('calls the listener function of a watch on first _digest', function () {
+  describe('#$watch', function () {
+    it('calls the listener function of a watch on first $digest', function () {
       const watchFn = () => 'wat';
       const listenerFn = sinon.spy();
-      scope._watch(watchFn, listenerFn);
+      scope.$watch(watchFn, listenerFn);
 
-      scope._digest();
+      scope.$digest();
 
       expect(listenerFn).to.have.been.called;
     });
@@ -31,9 +31,9 @@ describe('Scope', function () {
     it('calls the watch function with the scope as first argument', function () {
       const watchFn = sinon.spy();
       const listenerFn = () => {};
-      scope._watch(watchFn, listenerFn);
+      scope.$watch(watchFn, listenerFn);
 
-      scope._digest();
+      scope.$digest();
 
       expect(watchFn).to.have.been.calledWith(scope);
     });
@@ -42,35 +42,35 @@ describe('Scope', function () {
       (scope: any).someValue = 'a';
       const listenerFn = sinon.spy();
 
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).someValue,
         listenerFn
       );
 
       expect(listenerFn).to.have.not.been.called;
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
 
       (scope: any).someValue = 'aji';
       expect(listenerFn).to.have.been.calledOnce;
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
     });
 
     it('calls listener when watch value is first undefined', function () {
       const listenerFn = sinon.spy();
 
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).someValue,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
     });
 
@@ -78,27 +78,27 @@ describe('Scope', function () {
       (scope: any).someValue = 233;
       let oldValueGiven;
 
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).someValue,
         (newValue, oldValue, scope) => { oldValueGiven = oldValue; }
       );
 
-      scope._digest();
+      scope.$digest();
       expect(oldValueGiven).to.equal(233);
     });
 
     it('may have watcher that omit listener', function () {
       const watchFn = sinon.stub().returns('hello');
-      scope._watch(watchFn);
+      scope.$watch(watchFn);
 
-      scope._digest();
+      scope.$digest();
       expect(watchFn).to.have.been.called;
     });
 
     it('triggers chained watchers in the same digest', function () {
       (scope: any).name = 'Keal';
 
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).nameUpper,
         (newValue, oldValue, scope) => {
           if (newValue) {
@@ -107,7 +107,7 @@ describe('Scope', function () {
         }
       );
 
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).name,
         (newValue, oldValue, scope) => {
           if (newValue) {
@@ -116,11 +116,11 @@ describe('Scope', function () {
         }
       );
 
-      scope._digest();
+      scope.$digest();
       expect((scope: any).initial).to.equal('K@@');
 
       (scope: any).name = 'Aji';
-      scope._digest();
+      scope.$digest();
       expect((scope: any).initial).to.equal('A@@');
     });
 
@@ -129,7 +129,7 @@ describe('Scope', function () {
       let executedNum = 0;
 
       _.times(100, function (i) {
-        scope._watch(
+        scope.$watch(
           scope => {
             executedNum++;
             return (scope: any).arr[i];
@@ -137,11 +137,11 @@ describe('Scope', function () {
         );
       });
 
-      scope._digest();
+      scope.$digest();
       expect(executedNum).to.equal(200);
 
       (scope: any).arr[0] = 233;
-      scope._digest();
+      scope.$digest();
       expect(executedNum).to.equal(301);
     });
 
@@ -149,17 +149,17 @@ describe('Scope', function () {
       (scope: any).someValue = 'hello';
       const listenerFn = sinon.spy();
 
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).someValue,
         (newValue, oldValue, scope) => {
-          scope._watch(
+          scope.$watch(
             scope => (scope: any).someValue,
             listenerFn
           );
         }
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
     });
 
@@ -167,17 +167,17 @@ describe('Scope', function () {
       (scope: any).arr = _.range(3);
       const listenerFn = sinon.spy();
 
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).arr,
         listenerFn,
         true
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
 
       (scope: any).arr.push(3);
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
     });
 
@@ -185,15 +185,15 @@ describe('Scope', function () {
       (scope: any).number = 0 / 0;
       const listenerFn = sinon.spy();
 
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).number,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
     });
 
@@ -201,74 +201,74 @@ describe('Scope', function () {
       (scope: any).someValue = 233;
       const listenerFn = sinon.spy();
 
-      const destroyWatch = scope._watch(
+      const destroyWatch = scope.$watch(
         scope => (scope: any).someValue,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
 
       (scope: any).someValue = 256;
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
 
       (scope: any).someValue = 512;
       destroyWatch();
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
     });
 
-    it('allows destroying a _watch during digest', function () {
+    it('allows destroying a $watch during digest', function () {
       (scope: any).someValue = 233;
       const watchSpy = [];
 
-      scope._watch(
+      scope.$watch(
         scope => {
           watchSpy.push(0);
           return (scope: any).someValue;
         }
       );
 
-      const destroyWatch = scope._watch(
+      const destroyWatch = scope.$watch(
         () => {
           watchSpy.push(1);
           destroyWatch();
         }
       );
 
-      scope._watch(
+      scope.$watch(
         scope => {
           watchSpy.push(2);
           return (scope: any).someValue;
         }
       );
 
-      scope._digest();
+      scope.$digest();
       expect(watchSpy).to.deep.equal([0, 1, 2, 0, 2]);
     });
 
-    it('allows a _watch to destroy another during digest', function () {
+    it('allows a $watch to destroy another during digest', function () {
       (scope: any).someValue = 233;
       const listenerFn = sinon.spy();
       let destroyWatch;
 
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).someValue,
         () => { destroyWatch(); }
       );
 
-      destroyWatch = scope._watch(
+      destroyWatch = scope.$watch(
         () => {},
         () => {}
       );
 
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).someValue,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
     });
 
@@ -277,36 +277,36 @@ describe('Scope', function () {
       const listenerFn = sinon.spy();
       let destroyWatch1, destroyWatch2;
 
-      destroyWatch1 = scope._watch(
+      destroyWatch1 = scope.$watch(
         () => {
           destroyWatch1();
           destroyWatch2();
         }
       );
 
-      destroyWatch2 = scope._watch(
+      destroyWatch2 = scope.$watch(
         scope => (scope: any).someValue,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.not.been.called;
     });
 
     it('accepts expressions', function () {
       let theValue;
       (scope: any).someValue = 233;
-      scope._watch('someValue', newValue => { theValue = newValue; });
-      scope._digest();
+      scope.$watch('someValue', newValue => { theValue = newValue; });
+      scope.$digest();
       expect(theValue).to.equal(233);
     });
   });
 
-  describe('#_eval', function () {
-    it('executes _eval function and returns result', function () {
+  describe('#$eval', function () {
+    it('executes $eval function and returns result', function () {
       (scope: any).someValue = 233;
 
-      const result = scope._eval(scope => (scope: any).someValue);
+      const result = scope.$eval(scope => (scope: any).someValue);
 
       expect(result).to.equal(233);
     });
@@ -314,113 +314,113 @@ describe('Scope', function () {
     it('passes the second function argument', function () {
       (scope: any).someValue = 233;
 
-      const result = scope._eval((scope, arg) => (scope: any).someValue + arg, 2);
+      const result = scope.$eval((scope, arg) => (scope: any).someValue + arg, 2);
 
       expect(result).to.equal(235);
     });
 
     it('accepts expressions', function () {
-      expect(scope._eval('233')).to.equal(233);
+      expect(scope.$eval('233')).to.equal(233);
     });
   });
 
-  describe('#_apply', function () {
-    it('executes _apply function and starts digest', function () {
+  describe('#$apply', function () {
+    it('executes $apply function and starts digest', function () {
       (scope: any).someValue = 233;
       const listenerFn = sinon.spy();
 
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).someValue,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
 
-      scope._apply(scope => { (scope: any).someValue = 235; });
+      scope.$apply(scope => { (scope: any).someValue = 235; });
       expect(listenerFn).to.have.been.calledTwice;
     });
 
     it('accepts expressions', function () {
       (scope: any).aFn = _.constant(233);
-      expect(scope._apply('aFn()')).to.equal(233);
+      expect(scope.$apply('aFn()')).to.equal(233);
     });
   });
 
-  describe('#_evalAsync', function () {
-    it('executes _evalAsync function later in the same cycle', function () {
+  describe('#$evalAsync', function () {
+    it('executes $evalAsync function later in the same cycle', function () {
       (scope: any).someValue = 233;
       (scope: any).asyncEvaluated = false;
       (scope: any).asyncEvaluatedImmediately = false;
 
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).someValue,
         (newValue, oldValue, scope) => {
-          scope._evalAsync(scope => { (scope: any).asyncEvaluated = true; });
+          scope.$evalAsync(scope => { (scope: any).asyncEvaluated = true; });
           (scope: any).asyncEvaluatedImmediately = (scope: any).asyncEvaluated;
         }
       );
 
-      scope._digest();
+      scope.$digest();
       expect((scope: any).asyncEvaluated).to.be.true;
       expect((scope: any).asyncEvaluatedImmediately).to.be.false;
     });
 
-    it('executes _evalAsync function added by watch function', function () {
+    it('executes $evalAsync function added by watch function', function () {
       (scope: any).someValue = 233;
       (scope: any).asyncEvaluated = false;
 
-      scope._watch(
+      scope.$watch(
         scope => {
           if (!(scope: any).asyncEvaluated) {
-            scope._evalAsync(scope => { (scope: any).asyncEvaluated = true; });
+            scope.$evalAsync(scope => { (scope: any).asyncEvaluated = true; });
           }
           return (scope: any).someValue;
         }
       );
 
-      scope._digest();
+      scope.$digest();
       expect((scope: any).asyncEvaluated).to.be.true;
     });
 
-    it('executes _evalAsync function even when not dirty', function () {
+    it('executes $evalAsync function even when not dirty', function () {
       (scope: any).someValue = 233;
       (scope: any).asyncEvaluatedTime = 0;
 
-      scope._watch(
+      scope.$watch(
         scope => {
           if ((scope: any).asyncEvaluatedTime < 2) {
-            scope._evalAsync(scope => { (scope: any).asyncEvaluatedTime++; });
+            scope.$evalAsync(scope => { (scope: any).asyncEvaluatedTime++; });
           }
           return (scope: any).someValue;
         }
       );
 
-      scope._digest();
+      scope.$digest();
       expect((scope: any).asyncEvaluatedTime).to.equal(2);
     });
 
     it('throws error when halted by __evalAsyncs added by watch', function () {
-      scope._watch(
+      scope.$watch(
         scope => {
-          scope._evalAsync(() => {});
+          scope.$evalAsync(() => {});
           return (scope: any).someValue;
         }
       );
 
-      expect(() => { scope._digest(); }).to.throw();
+      expect(() => { scope.$digest(); }).to.throw();
     });
 
-    it('schedules a digest in _evalAsync', function (done) {
+    it('schedules a digest in $evalAsync', function (done) {
       (scope: any).someValue = 233;
       const listernerFn = sinon.spy();
 
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).someValue,
         listernerFn
       );
 
-      scope._evalAsync(() => {});
+      scope.$evalAsync(() => {});
       expect(listernerFn).to.have.not.been.called;
       setTimeout(function () {
         expect(listernerFn).to.have.been.calledOnce;
@@ -428,32 +428,32 @@ describe('Scope', function () {
       }, 10);
     });
 
-    it('accepts expressions in _evalAsync', function (done) {
+    it('accepts expressions in $evalAsync', function (done) {
       const spy = sinon.spy();
       (scope: any).aFn = spy;
 
-      scope._evalAsync('aFn()');
+      scope.$evalAsync('aFn()');
 
-      scope.__postDigest(() => {
+      scope.$$postDigest(() => {
         expect(spy).to.have.been.calledOnce;
         done();
       });
     });
   });
 
-  describe('#_applyAsync', function () {
+  describe('#$applyAsync', function () {
     it('apply function asynchronously', function (done) {
       const listenerFn = sinon.spy();
 
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).someValue,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
 
-      scope._applyAsync(scope => { (scope: any).someValue = 233; });
+      scope.$applyAsync(scope => { (scope: any).someValue = 233; });
       expect(listenerFn).to.have.been.calledOnce;
 
       setTimeout(() => {
@@ -462,18 +462,18 @@ describe('Scope', function () {
       }, 10);
     });
 
-    it('does not execute _applyAsync\'ed function in the same cycle', function (done) {
+    it('does not execute $applyAsync\'ed function in the same cycle', function (done) {
       (scope: any).someValue = 233;
       const asyncAppliedFn = sinon.spy();
 
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).someValue,
         (newValue, oldValue, scope) => {
-          scope._applyAsync(asyncAppliedFn);
+          scope.$applyAsync(asyncAppliedFn);
         }
       );
 
-      scope._digest();
+      scope.$digest();
       expect(asyncAppliedFn).to.have.not.been.called;
       setTimeout(() => {
         expect(asyncAppliedFn).to.have.been.calledOnce;
@@ -481,15 +481,15 @@ describe('Scope', function () {
       }, 10);
     });
 
-    it('coalesces many calls to _applyAsync', function (done) {
+    it('coalesces many calls to $applyAsync', function (done) {
       const watcherFn = sinon.spy(scope => (scope: any).someValue);
 
-      scope._watch(
+      scope.$watch(
         watcherFn
       );
 
-      scope._applyAsync(scope => { (scope: any).someValue = 233; });
-      scope._applyAsync(scope => { (scope: any).someValue = 256; });
+      scope.$applyAsync(scope => { (scope: any).someValue = 233; });
+      scope.$applyAsync(scope => { (scope: any).someValue = 256; });
 
       setTimeout(() => {
         expect(watcherFn).to.have.been.calledTwice;
@@ -497,17 +497,17 @@ describe('Scope', function () {
       }, 10);
     });
 
-    it('cancels and flushes _applyAsync if digest', function (done) {
+    it('cancels and flushes $applyAsync if digest', function (done) {
       const watcherFn = sinon.spy(scope => (scope: any).someValue);
 
-      scope._watch(
+      scope.$watch(
         watcherFn
       );
 
-      scope._applyAsync(scope => { (scope: any).someValue = 233; });
-      scope._applyAsync(scope => { (scope: any).someValue = 256; });
+      scope.$applyAsync(scope => { (scope: any).someValue = 233; });
+      scope.$applyAsync(scope => { (scope: any).someValue = 256; });
 
-      scope._digest();
+      scope.$digest();
       expect(watcherFn).to.have.been.calledTwice;
       expect((scope: any).someValue).to.equal(256);
 
@@ -518,70 +518,70 @@ describe('Scope', function () {
     });
   });
 
-  describe('#__phase', function () {
-    it('has a __phase as the current digest phase', function () {
+  describe('#$$phase', function () {
+    it('has a $$phase as the current digest phase', function () {
       (scope: any).someValue = 233;
       let phaseInWatch, phaseInListener, phaseInApply;
 
-      scope._watch(
+      scope.$watch(
         scope => {
-          phaseInWatch = scope.__phase;
+          phaseInWatch = scope.$$phase;
           return (scope: any).someValue;
         },
         (newValue, oldValue, scope) => {
-          phaseInListener = scope.__phase;
+          phaseInListener = scope.$$phase;
         }
       );
 
-      scope._apply(scope => {
-        phaseInApply = scope.__phase;
+      scope.$apply(scope => {
+        phaseInApply = scope.$$phase;
       });
 
-      expect(phaseInWatch).to.equal('_digest');
-      expect(phaseInListener).to.equal('_digest');
-      expect(phaseInApply).to.equal('_apply');
+      expect(phaseInWatch).to.equal('$digest');
+      expect(phaseInListener).to.equal('$digest');
+      expect(phaseInApply).to.equal('$apply');
     });
   });
 
-  describe('#__postDigest', function () {
-    it('runs a __postDigest function after each digest', function () {
+  describe('#$$postDigest', function () {
+    it('runs a $$postDigest function after each digest', function () {
       const postDigestFn = sinon.spy();
 
-      scope.__postDigest(postDigestFn);
+      scope.$$postDigest(postDigestFn);
 
       expect(postDigestFn).to.have.not.been.called;
 
-      scope._digest();
+      scope.$digest();
       expect(postDigestFn).to.have.been.calledOnce;
 
-      scope._digest();
+      scope.$digest();
       expect(postDigestFn).to.have.been.calledOnce;
     });
 
-    it('does not include __postDigest in a digest', function () {
+    it('does not include $$postDigest in a digest', function () {
       (scope: any).someValue = 233;
 
-      scope.__postDigest(() => { (scope: any).someValue = 256; });
+      scope.$$postDigest(() => { (scope: any).someValue = 256; });
 
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).someValue,
         (newValue, oldValue, scope) => { (scope: any).watchedValue = newValue; }
       );
 
-      scope._digest();
+      scope.$digest();
       expect((scope: any).watchedValue).to.equal(233);
 
-      scope._digest();
+      scope.$digest();
       expect((scope: any).watchedValue).to.equal(256);
     });
   });
 
-  describe('#_watchGroup', function () {
+  describe('#$watchGroup', function () {
     it('takes watches as an array and calls listener with arrays', function () {
       (scope: any).someValue = 0;
       (scope: any).anotherValue = 1;
 
-      scope._watchGroup([
+      scope.$watchGroup([
         scope => (scope: any).someValue,
         scope => (scope: any).anotherValue
       ], (newValues, oldValues, scope) => {
@@ -589,7 +589,7 @@ describe('Scope', function () {
         (scope: any).gotOldValues = oldValues;
       });
 
-      scope._digest();
+      scope.$digest();
       expect((scope: any).gotOldValues).to.deep.equal([0, 1]);
       expect((scope: any).gotOldValues).to.deep.equal([0, 1]);
     });
@@ -599,12 +599,12 @@ describe('Scope', function () {
       (scope: any).someValue = 0;
       (scope: any).anotherValue = 1;
 
-      scope._watchGroup([
+      scope.$watchGroup([
         scope => (scope: any).someValue,
         scope => (scope: any).anotherValue
       ], listenerFn);
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
     });
 
@@ -612,7 +612,7 @@ describe('Scope', function () {
       (scope: any).someValue = 0;
       (scope: any).anotherValue = 1;
 
-      scope._watchGroup([
+      scope.$watchGroup([
         scope => (scope: any).someValue,
         scope => (scope: any).anotherValue
       ], (newValues, oldValues, scope) => {
@@ -620,7 +620,7 @@ describe('Scope', function () {
         (scope: any).gotNewValues = newValues;
       });
 
-      scope._digest();
+      scope.$digest();
       expect((scope: any).gotOldValues).to.equal((scope: any).gotNewValues);
     });
 
@@ -628,7 +628,7 @@ describe('Scope', function () {
       (scope: any).someValue = 0;
       (scope: any).anotherValue = 1;
 
-      scope._watchGroup([
+      scope.$watchGroup([
         scope => (scope: any).someValue,
         scope => (scope: any).anotherValue
       ], (newValues, oldValues, scope) => {
@@ -636,11 +636,11 @@ describe('Scope', function () {
         (scope: any).gotNewValues = newValues;
       });
 
-      scope._digest();
+      scope.$digest();
       expect((scope: any).gotOldValues).to.deep.equal([0, 1]);
 
       (scope: any).anotherValue = 2;
-      scope._digest();
+      scope.$digest();
       expect((scope: any).gotOldValues).to.deep.equal([0, 1]);
       expect((scope: any).gotNewValues).to.deep.equal([0, 2]);
     });
@@ -649,12 +649,12 @@ describe('Scope', function () {
       (scope: any).someValue = 0;
       (scope: any).anotherValue = 1;
 
-      scope._watchGroup([], (newValues, oldValues, scope) => {
+      scope.$watchGroup([], (newValues, oldValues, scope) => {
         (scope: any).gotOldValues = oldValues;
         (scope: any).gotNewValues = newValues;
       });
 
-      scope._digest();
+      scope.$digest();
       expect((scope: any).gotOldValues).to.be.an('array').and.empty;
       expect((scope: any).gotNewValues).to.be.an('array').and.empty;
     });
@@ -664,50 +664,50 @@ describe('Scope', function () {
       (scope: any).anotherValue = 1;
       const listenerFn = sinon.spy();
 
-      const destroyGroup = scope._watchGroup([
+      const destroyGroup = scope.$watchGroup([
         scope => (scope: any).someValue,
         scope => (scope: any).anotherValue
       ], listenerFn);
 
-      scope._digest();
+      scope.$digest();
       (scope: any).anotherValue = 2;
       destroyGroup();
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
     });
 
     it('does not call the zero-watch listener when deregistered first', function () {
       const listenerFn = sinon.spy();
 
-      const destroyGroup = scope._watchGroup([], listenerFn);
+      const destroyGroup = scope.$watchGroup([], listenerFn);
 
       destroyGroup();
-      scope._digest();
+      scope.$digest();
 
       expect(listenerFn).to.have.not.been.called;
     });
   });
 
-  describe('#_watchCollection', function () {
+  describe('#$watchCollection', function () {
     it('works like a normal watch for non-colletions', function () {
       (scope: any).someValue = 233;
       let value;
       const listenerFn = sinon.spy((newValue, oldValue, scope) => { value = oldValue; });
 
-      scope._watchCollection(
+      scope.$watchCollection(
         scope => (scope: any).someValue,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
       expect(value).to.equal(233);
 
       (scope: any).someValue = 256;
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
     });
 
@@ -715,31 +715,31 @@ describe('Scope', function () {
       (scope: any).someValue = 0 / 0;
       const listenerFn = sinon.spy();
 
-      scope._watchCollection(
+      scope.$watchCollection(
         scope => (scope: any).someValue,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
     });
 
     it('notices when the value becomes an array', function () {
       const listenerFn = sinon.spy();
 
-      scope._watchCollection(
+      scope.$watchCollection(
         scope => (scope: any).arr,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
 
       (scope: any).arr = [0, 1];
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
     });
 
@@ -747,19 +747,19 @@ describe('Scope', function () {
       (scope: any).arr = [0, 1, 2];
       const listenerFn = sinon.spy();
 
-      scope._watchCollection(
+      scope.$watchCollection(
         scope => (scope: any).arr,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
 
       (scope: any).arr.push(3);
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
     });
 
@@ -767,19 +767,19 @@ describe('Scope', function () {
       (scope: any).arr = [0, 1, 2];
       const listenerFn = sinon.spy();
 
-      scope._watchCollection(
+      scope.$watchCollection(
         scope => (scope: any).arr,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
 
       (scope: any).arr.shift();
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
     });
 
@@ -787,19 +787,19 @@ describe('Scope', function () {
       (scope: any).arr = [0, 1, 2];
       const listenerFn = sinon.spy();
 
-      scope._watchCollection(
+      scope.$watchCollection(
         scope => (scope: any).arr,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
 
       (scope: any).arr[1] = 10;
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
     });
 
@@ -807,19 +807,19 @@ describe('Scope', function () {
       (scope: any).arr = [3, 1, 2];
       const listenerFn = sinon.spy();
 
-      scope._watchCollection(
+      scope.$watchCollection(
         scope => (scope: any).arr,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
 
       (scope: any).arr.sort();
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
     });
 
@@ -827,12 +827,12 @@ describe('Scope', function () {
       (scope: any).arr = [0, Number.NaN, 2, Number.NaN];
       const listenerFn = sinon.spy();
 
-      scope._watchCollection(
+      scope.$watchCollection(
         scope => (scope: any).arr,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
     });
 
@@ -842,19 +842,19 @@ describe('Scope', function () {
       })(0, 1, 2);
       const listenerFn = sinon.spy();
 
-      scope._watchCollection(
+      scope.$watchCollection(
         scope => (scope: any).arrLike,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
 
       (scope: any).arrLike[1] = 233;
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
     });
 
@@ -863,38 +863,38 @@ describe('Scope', function () {
       (scope: any).arrLike = document.getElementsByTagName('div');
       const listenerFn = sinon.spy();
 
-      scope._watchCollection(
+      scope.$watchCollection(
         scope => (scope: any).arrLike,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
 
       document.documentElement.appendChild(document.createElement('div'));
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
     });
 
     it('notices when the value becomes an object', function () {
       const listenerFn = sinon.spy();
 
-      scope._watchCollection(
+      scope.$watchCollection(
         scope => (scope: any).obj,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
 
       (scope: any).obj = { a: 1 };
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
     });
 
@@ -902,54 +902,54 @@ describe('Scope', function () {
       (scope: any).obj = { a: 1 };
       const listenerFn = sinon.spy();
 
-      scope._watchCollection(
+      scope.$watchCollection(
         scope => (scope: any).obj,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
 
       (scope: any).obj.b = 2;
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
 
-      scope._digest();
+      scope.$digest();
     });
 
     it('detects when an attribute is changed in an object', function () {
       (scope: any).obj = { a: 1 };
       const listenerFn = sinon.spy();
 
-      scope._watchCollection(
+      scope.$watchCollection(
         scope => (scope: any).obj,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
 
       (scope: any).obj.a = 2;
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
 
-      scope._digest();
+      scope.$digest();
     });
 
     it('detects when an attribute is deleted to an object', function () {
       (scope: any).obj = { a: 1 };
       const listenerFn = sinon.spy();
 
-      scope._watchCollection(
+      scope.$watchCollection(
         scope => (scope: any).obj,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
 
       delete (scope: any).obj.a;
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
     });
 
@@ -957,12 +957,12 @@ describe('Scope', function () {
       (scope: any).obj = { a: Number.NaN };
       const listenerFn = sinon.spy();
 
-      scope._watchCollection(
+      scope.$watchCollection(
         scope => (scope: any).obj,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
     });
 
@@ -970,16 +970,16 @@ describe('Scope', function () {
       (scope: any).obj = { length: 233, someKey: 1 };
       const listenerFn = sinon.spy();
 
-      scope._watchCollection(
+      scope.$watchCollection(
         scope => (scope: any).obj,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
 
       (scope: any).obj.otherKey = 256;
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
     });
 
@@ -988,7 +988,7 @@ describe('Scope', function () {
       let gotNewValue;
       let gotOldValue;
 
-      scope._watchCollection(
+      scope.$watchCollection(
         scope => (scope: any).arr,
         (newValue, oldValue) => {
           gotNewValue = newValue;
@@ -996,12 +996,12 @@ describe('Scope', function () {
         }
       );
 
-      scope._digest();
+      scope.$digest();
       expect(gotNewValue).to.deep.equal([0, 1, 2]);
       expect(gotOldValue).to.deep.equal([0, 1, 2]);
 
       (scope: any).arr.push(3);
-      scope._digest();
+      scope.$digest();
       expect(gotNewValue).to.deep.equal([0, 1, 2, 3]);
       expect(gotOldValue).to.deep.equal([0, 1, 2]);
     });
@@ -1009,18 +1009,18 @@ describe('Scope', function () {
     it('accepts expressions for watch functions', function () {
       let theValue;
       (scope: any).arr = [0, 1, 2];
-      scope._watchCollection('arr', newValue => { theValue = newValue; });
-      scope._digest();
+      scope.$watchCollection('arr', newValue => { theValue = newValue; });
+      scope.$digest();
       expect(theValue).to.deep.equal([0, 1, 2]);
     });
   });
 
   describe('Events', function () {
-    let child, isolatedChild;
+    let child: Scope, isolatedChild: Scope;
 
     beforeEach(() => {
-      child = scope._new();
-      isolatedChild = scope._new(true);
+      child = scope.$new();
+      isolatedChild = scope.$new(true);
     });
 
     it('allows registering listeners', function () {
@@ -1028,11 +1028,11 @@ describe('Scope', function () {
       const listener2 = () => {};
       const listener3 = () => {};
 
-      scope._on('aEvent', listener1);
-      scope._on('aEvent', listener2);
-      scope._on('bEvent', listener3);
+      scope.$on('aEvent', listener1);
+      scope.$on('aEvent', listener2);
+      scope.$on('bEvent', listener3);
 
-      expect(scope.__listeners).to.deep.equal({
+      expect(scope.$$listeners).to.deep.equal({
         aEvent: [listener1, listener2],
         bEvent: [listener3]
       });
@@ -1043,24 +1043,24 @@ describe('Scope', function () {
       const listener2 = () => {};
       const listener3 = () => {};
 
-      scope._on('aEvent', listener1);
-      child._on('aEvent', listener2);
-      isolatedChild._on('aEvent', listener3);
+      scope.$on('aEvent', listener1);
+      child.$on('aEvent', listener2);
+      isolatedChild.$on('aEvent', listener3);
 
-      expect(scope.__listeners).to.deep.equal({ aEvent: [listener1] });
-      expect(child.__listeners).to.deep.equal({ aEvent: [listener2] });
-      expect(isolatedChild.__listeners).to.deep.equal({ aEvent: [listener3] });
+      expect(scope.$$listeners).to.deep.equal({ aEvent: [listener1] });
+      expect(child.$$listeners).to.deep.equal({ aEvent: [listener2] });
+      expect(isolatedChild.$$listeners).to.deep.equal({ aEvent: [listener3] });
     });
 
-    _.each(['_emit', '_broadcast'], method => {
+    _.each(['$emit', '$broadcast'], method => {
       it(`calls the listeners of the matching event on ${method}`, function () {
         const listener1 = sinon.spy();
         const listener2 = sinon.spy();
         const listener3 = sinon.spy();
 
-        scope._on('aEvent', listener1);
-        scope._on('aEvent', listener2);
-        scope._on('bEvent', listener3);
+        scope.$on('aEvent', listener1);
+        scope.$on('aEvent', listener2);
+        scope.$on('bEvent', listener3);
 
         (scope: any)[method]('aEvent');
         expect(listener1).to.have.been.calledOnce;
@@ -1070,7 +1070,7 @@ describe('Scope', function () {
 
       it(`passes an event object with a name to listener on ${method}`, function () {
         const listener = sinon.spy();
-        scope._on('aEvent', listener);
+        scope.$on('aEvent', listener);
 
         (scope: any)[method]('aEvent');
         expect(listener).to.have.been.calledOnce;
@@ -1081,8 +1081,8 @@ describe('Scope', function () {
         const listener1 = sinon.spy();
         const listener2 = sinon.spy();
 
-        scope._on('aEvent', listener1);
-        scope._on('aEvent', listener2);
+        scope.$on('aEvent', listener1);
+        scope.$on('aEvent', listener2);
 
         (scope: any)[method]('aEvent');
         expect(listener1.lastCall.args[0]).to.equal(listener2.lastCall.args[0]);
@@ -1090,7 +1090,7 @@ describe('Scope', function () {
 
       it(`passes additional arguments to listeners on ${method}`, function () {
         const listener = sinon.spy();
-        scope._on('aEvent', listener);
+        scope.$on('aEvent', listener);
 
         (scope: any)[method]('aEvent', 'some', ['additional', 'arguments'], '...');
 
@@ -1107,7 +1107,7 @@ describe('Scope', function () {
 
       it(`can be deregistered ${method}`, function () {
         const listener = sinon.spy();
-        const deregister = scope._on('aEvent', listener);
+        const deregister = scope.$on('aEvent', listener);
 
         deregister();
         (scope: any)[method]('aEvent');
@@ -1120,15 +1120,15 @@ describe('Scope', function () {
           deregister();
         };
         const nextListener = sinon.spy();
-        const deregister = scope._on('aEvent', listener);
-        scope._on('aEvent', nextListener);
+        const deregister = scope.$on('aEvent', listener);
+        scope.$on('aEvent', nextListener);
 
         (scope: any)[method]('aEvent');
         expect(nextListener).to.have.been.calledOnce;
       });
 
       it(`sets defaultPrevented when preventDefault called on ${method}`, function () {
-        scope._on('aEvent', event => { event.preventDefault(); });
+        scope.$on('aEvent', event => { event.preventDefault(); });
 
         const event = (scope: any)[method]('aEvent');
 
@@ -1137,158 +1137,158 @@ describe('Scope', function () {
 
       it(`does not stop on exceptions on ${method}`, function () {
         const listener = sinon.spy();
-        scope._on('aEvent', () => { throw new Error('error'); });
-        scope._on('aEvent', listener);
+        scope.$on('aEvent', () => { throw new Error('error'); });
+        scope.$on('aEvent', listener);
 
         (scope: any)[method]('aEvent');
         expect(listener).to.have.been.calledOnce;
       });
     });
 
-    it('propagates up the scope hierarchy on _emit', function () {
+    it('propagates up the scope hierarchy on $emit', function () {
       const scopeListener = sinon.spy();
       const childListener = sinon.spy();
 
-      scope._on('aEvent', scopeListener);
-      child._on('aEvent', childListener);
+      scope.$on('aEvent', scopeListener);
+      child.$on('aEvent', childListener);
 
-      child._emit('aEvent');
+      child.$emit('aEvent');
       expect(scopeListener).to.have.been.calledOnce;
       expect(childListener).to.have.been.calledOnce;
     });
 
-    it('propagates the same event up on _emit', function () {
+    it('propagates the same event up on $emit', function () {
       const scopeListener = sinon.spy();
       const childListener = sinon.spy();
 
-      scope._on('aEvent', scopeListener);
-      child._on('aEvent', childListener);
+      scope.$on('aEvent', scopeListener);
+      child.$on('aEvent', childListener);
 
-      child._emit('aEvent');
+      child.$emit('aEvent');
       expect(scopeListener.lastCall.args[0]).to.equal(childListener.lastCall.args[0]);
     });
 
-    it('propagates down the scope hierarchy on _broadcast', function () {
+    it('propagates down the scope hierarchy on $broadcast', function () {
       const scopeListener = sinon.spy();
       const childListener = sinon.spy();
       const isolatedChildListener = sinon.spy();
 
-      scope._on('aEvent', scopeListener);
-      child._on('aEvent', childListener);
-      isolatedChild._on('aEvent', isolatedChildListener);
+      scope.$on('aEvent', scopeListener);
+      child.$on('aEvent', childListener);
+      isolatedChild.$on('aEvent', isolatedChildListener);
 
-      scope._broadcast('aEvent');
+      scope.$broadcast('aEvent');
       expect(scopeListener).to.have.been.calledOnce;
       expect(childListener).to.have.been.calledOnce;
       expect(isolatedChildListener).to.have.been.calledOnce;
     });
 
-    it('propagates the same event down on _broadcast', function () {
+    it('propagates the same event down on $broadcast', function () {
       const scopeListener = sinon.spy();
       const childListener = sinon.spy();
       const isolatedChildListener = sinon.spy();
 
-      scope._on('aEvent', scopeListener);
-      child._on('aEvent', childListener);
-      isolatedChild._on('aEvent', isolatedChildListener);
+      scope.$on('aEvent', scopeListener);
+      child.$on('aEvent', childListener);
+      isolatedChild.$on('aEvent', isolatedChildListener);
 
-      scope._broadcast('aEvent');
+      scope.$broadcast('aEvent');
       expect(scopeListener.lastCall.args[0]).to.equal(childListener.lastCall.args[0]);
       expect(scopeListener.lastCall.args[0]).to.equal(isolatedChildListener.lastCall.args[0]);
     });
 
-    it('attaches targetScope on _emit', function () {
+    it('attaches targetScope on $emit', function () {
       const scopeListener = sinon.spy();
       const childListener = sinon.spy();
 
-      scope._on('aEvent', scopeListener);
-      child._on('aEvent', childListener);
+      scope.$on('aEvent', scopeListener);
+      child.$on('aEvent', childListener);
 
-      child._emit('aEvent');
+      child.$emit('aEvent');
       expect(scopeListener.lastCall.args[0]).to.have.property('targetScope', child);
       expect(childListener.lastCall.args[0]).to.have.property('targetScope', child);
     });
 
-    it('attaches targetScope on _broadcast', function () {
+    it('attaches targetScope on $broadcast', function () {
       const scopeListener = sinon.spy();
       const childListener = sinon.spy();
 
-      scope._on('aEvent', scopeListener);
-      child._on('aEvent', childListener);
+      scope.$on('aEvent', scopeListener);
+      child.$on('aEvent', childListener);
 
-      scope._broadcast('aEvent');
+      scope.$broadcast('aEvent');
       expect(scopeListener.lastCall.args[0]).to.have.property('targetScope', scope);
       expect(childListener.lastCall.args[0]).to.have.property('targetScope', scope);
     });
 
-    it('attaches currentScope on _emit', function () {
+    it('attaches currentScope on $emit', function () {
       let currentScopeOnScope;
       let currentScopeOnChild;
-      scope._on('aEvent', (event) => { currentScopeOnScope = event.currentScope; });
-      child._on('aEvent', (event) => { currentScopeOnChild = event.currentScope; });
+      scope.$on('aEvent', (event) => { currentScopeOnScope = event.currentScope; });
+      child.$on('aEvent', (event) => { currentScopeOnChild = event.currentScope; });
 
-      child._emit('aEvent');
+      child.$emit('aEvent');
       expect(currentScopeOnChild).to.equal(child);
       expect(currentScopeOnScope).to.equal(scope);
     });
 
-    it('attaches currentScope on _broadcast', function () {
+    it('attaches currentScope on $broadcast', function () {
       let currentScopeOnScope;
       let currentScopeOnChild;
-      scope._on('aEvent', event => { currentScopeOnScope = event.currentScope; });
-      child._on('aEvent', event => { currentScopeOnChild = event.currentScope; });
+      scope.$on('aEvent', event => { currentScopeOnScope = event.currentScope; });
+      child.$on('aEvent', event => { currentScopeOnChild = event.currentScope; });
 
-      scope._broadcast('aEvent');
+      scope.$broadcast('aEvent');
       expect(currentScopeOnChild).to.equal(child);
       expect(currentScopeOnScope).to.equal(scope);
     });
 
-    it('sets currentScope to null after propagation on _emit', function () {
-      scope._on('aEvent', () => {});
+    it('sets currentScope to null after propagation on $emit', function () {
+      scope.$on('aEvent', () => {});
 
-      const event = scope._emit('aEvent');
+      const event = scope.$emit('aEvent');
       expect(event.currentScope).to.be.null;
     });
 
-    it('sets currentScope to null after propagation on _broadcast', function () {
-      scope._on('aEvent', () => {});
+    it('sets currentScope to null after propagation on $broadcast', function () {
+      scope.$on('aEvent', () => {});
 
-      const event = scope._broadcast('aEvent');
+      const event = scope.$broadcast('aEvent');
       expect(event.currentScope).to.be.null;
     });
 
     it('does not propagate to parents when stopped', function () {
       const scopeListener = sinon.spy();
 
-      child._on('aEvent', event => { event.stopPropagation && event.stopPropagation(); });
-      scope._on('aEvent', scopeListener);
+      child.$on('aEvent', event => { event.stopPropagation && event.stopPropagation(); });
+      scope.$on('aEvent', scopeListener);
 
-      child._emit('aEvent');
+      child.$emit('aEvent');
       expect(scopeListener).to.have.not.been.called;
     });
 
-    it('fires _destroy when destroyed', function () {
+    it('fires $destroy when destroyed', function () {
       const listener = sinon.spy();
-      scope._on('_destroy', listener);
+      scope.$on('$destroy', listener);
 
-      scope._destroy();
+      scope.$destroy();
       expect(listener).to.have.been.calledOnce;
     });
 
-    it('broadcast _destroy to children when destroyed', function () {
+    it('broadcast $destroy to children when destroyed', function () {
       const listener = sinon.spy();
-      child._on('_destroy', listener);
+      child.$on('$destroy', listener);
 
-      scope._destroy();
+      scope.$destroy();
       expect(listener).to.have.been.calledOnce;
     });
 
     it('does not call listeners after destroyed', function () {
       const listener = sinon.spy();
-      scope._on('aEvent', listener);
+      scope.$on('aEvent', listener);
 
-      scope._destroy();
-      scope._emit('aEvent');
+      scope.$destroy();
+      scope.$emit('aEvent');
       expect(listener).to.have.not.been.called;
     });
   });
@@ -1298,16 +1298,16 @@ describe('Scope', function () {
       (scope: any).someValue = 233;
       const listenerFn = sinon.spy();
 
-      scope._watch(
+      scope.$watch(
         () => { throw new Error('error'); }
       );
 
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).someValue,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
     });
 
@@ -1315,30 +1315,30 @@ describe('Scope', function () {
       (scope: any).someValue = 233;
       const listenerFn = sinon.spy();
 
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).someValue,
         () => { throw new Error('error'); }
       );
 
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).someValue,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
     });
 
-    it('catches exceptions in _evalAsync', function (done) {
+    it('catches exceptions in $evalAsync', function (done) {
       (scope: any).someValue = 233;
       const listenerFn = sinon.spy();
 
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).someValue,
         listenerFn
       );
 
-      scope._evalAsync(() => {
+      scope.$evalAsync(() => {
         throw new Error('error');
       });
 
@@ -1348,18 +1348,18 @@ describe('Scope', function () {
       }, 10);
     });
 
-    it('catches exceptions in _applyAsync', function (done) {
+    it('catches exceptions in $applyAsync', function (done) {
       const appliedFn = sinon.spy();
 
-      scope._applyAsync(() => {
+      scope.$applyAsync(() => {
         throw new Error('error');
       });
 
-      scope._applyAsync(() => {
+      scope.$applyAsync(() => {
         throw new Error('error');
       });
 
-      scope._applyAsync(appliedFn);
+      scope.$applyAsync(appliedFn);
 
       setTimeout(() => {
         expect(appliedFn).to.have.been.calledOnce;
@@ -1367,16 +1367,16 @@ describe('Scope', function () {
       }, 10);
     });
 
-    it('catches exceptions in __postDigest', function () {
+    it('catches exceptions in $$postDigest', function () {
       const postDigestFn = sinon.spy();
 
-      scope.__postDigest(() => {
+      scope.$$postDigest(() => {
         throw new Error('error');
       });
 
-      scope.__postDigest(postDigestFn);
+      scope.$$postDigest(postDigestFn);
 
-      scope._digest();
+      scope.$digest();
       expect(postDigestFn).to.have.been.calledOnce;
     });
   });
@@ -1384,27 +1384,27 @@ describe('Scope', function () {
   describe('inheritance', function () {
     it('inherits the parent\'s properties', function () {
       (scope: any).someValue = 233;
-      const child = scope._new();
+      const child = scope.$new();
 
       expect((child: any).someValue).to.equal(233);
     });
 
     it('does not cause a parent to inherit its properties', function () {
-      const child = scope._new();
+      const child = scope.$new();
 
       (child: any).someValue = 233;
       expect((scope: any).someValue).to.be.undefined;
     });
 
     it('inherits the parent\'s value whenever the are defined', function () {
-      const child = scope._new();
+      const child = scope.$new();
       (scope: any).someValue = 233;
 
       expect((child: any).someValue).to.equal(233);
     });
 
     it('can manipulate parent\'s properties', function () {
-      const child = scope._new();
+      const child = scope.$new();
       (scope: any).arr = [0, 1, 2];
 
       (child: any).arr.push(3);
@@ -1413,30 +1413,30 @@ describe('Scope', function () {
     });
 
     it('can watch a property in parent', function () {
-      const child = scope._new();
+      const child = scope.$new();
       const listenerFn = sinon.spy();
       (scope: any).arr = [0, 1, 2];
 
-      child._watch(
+      child.$watch(
         scope => (scope: any).arr,
         listenerFn,
         true
       );
 
-      child._digest();
+      child.$digest();
       expect(listenerFn).to.have.been.calledOnce;
 
       (scope: any).arr.push(3);
-      child._digest();
+      child.$digest();
       expect(listenerFn).to.have.been.calledTwice;
     });
 
     it('can be nested at any depth', function () {
-      const c1 = scope._new();
-      const c2 = scope._new();
-      const c1c1 = c1._new();
-      const c1c2 = c1._new();
-      const c2c1 = c2._new();
+      const c1 = scope.$new();
+      const c2 = scope.$new();
+      const c1c1 = c1.$new();
+      const c1c2 = c1.$new();
+      const c2c1 = c2.$new();
 
       (scope: any).someValue = 233;
       expect((c1: any).someValue).to.equal(233);
@@ -1453,7 +1453,7 @@ describe('Scope', function () {
     });
 
     it('shadows parent\'s property with the same name', function () {
-      const child = scope._new();
+      const child = scope.$new();
 
       (scope: any).someValue = 233;
       (child: any).someValue = 256;
@@ -1463,7 +1463,7 @@ describe('Scope', function () {
     });
 
     it('does not deeply shadow parents\'s properties', function () {
-      const child = scope._new();
+      const child = scope.$new();
 
       (scope: any).user = { name: 'Aji' };
       (child: any).user.name = 'Keal';
@@ -1473,74 +1473,74 @@ describe('Scope', function () {
     });
 
     it('does not digest its parent', function () {
-      const child = scope._new();
+      const child = scope.$new();
       const listenerFn = sinon.spy();
 
       (scope: any).someValue = 233;
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).someValue,
         listenerFn
       );
 
-      child._digest();
+      child.$digest();
       expect(listenerFn).to.have.not.been.called;
     });
 
     it('keeps a record of its children', function () {
-      const child1 = scope._new();
-      const child2 = scope._new();
-      const child2child1 = child2._new();
+      const child1 = scope.$new();
+      const child2 = scope.$new();
+      const child2child1 = child2.$new();
 
-      expect(scope.__children).to.have.lengthOf(2);
-      expect(scope.__children[0]).to.equal(child1);
-      expect(scope.__children[1]).to.equal(child2);
+      expect(scope.$$children).to.have.lengthOf(2);
+      expect(scope.$$children[0]).to.equal(child1);
+      expect(scope.$$children[1]).to.equal(child2);
 
-      expect(child1.__children).to.have.lengthOf(0);
-      expect(child2.__children).to.have.lengthOf(1);
-      expect(child2.__children[0]).to.equal(child2child1);
+      expect(child1.$$children).to.have.lengthOf(0);
+      expect(child2.$$children).to.have.lengthOf(1);
+      expect(child2.$$children[0]).to.equal(child2child1);
     });
 
     it('digests its children', function () {
       (scope: any).someValue = 233;
-      const child = scope._new();
+      const child = scope.$new();
       const listenerFn = sinon.spy();
 
-      child._watch(
+      child.$watch(
         scope => (scope: any).someValue,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
     });
 
-    it('digests from root when _apply', function () {
+    it('digests from root when $apply', function () {
       (scope: any).someValue = 233;
-      const child1 = scope._new();
-      const child1child1 = child1._new();
+      const child1 = scope.$new();
+      const child1child1 = child1.$new();
       const listenerFn = sinon.spy();
 
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).someValue,
         listenerFn
       );
 
-      child1child1._apply(() => {});
+      child1child1.$apply(() => {});
       expect(listenerFn).to.have.been.calledOnce;
     });
 
-    it('schedules a digest from root on _evalAsync', function (done) {
+    it('schedules a digest from root on $evalAsync', function (done) {
       (scope: any).someValue = 233;
-      const child1 = scope._new();
-      const child1child1 = child1._new();
+      const child1 = scope.$new();
+      const child1child1 = child1.$new();
       const listenerFn = sinon.spy();
 
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).someValue,
         listenerFn
       );
 
-      child1child1._evalAsync(() => {});
+      child1child1.$evalAsync(() => {});
       setTimeout(() => {
         expect(listenerFn).to.have.been.calledOnce;
         done();
@@ -1549,87 +1549,87 @@ describe('Scope', function () {
 
     it('does not have access to parent scope attributes when isolated', function () {
       (scope: any).someValue = 233;
-      const child = scope._new(true);
+      const child = scope.$new(true);
 
       expect((child: any).someValue).to.be.undefined;
     });
 
     it('digests its isolated children', function () {
-      const child = scope._new(true);
+      const child = scope.$new(true);
       (child: any).someValue = 233;
       const listenerFn = sinon.spy();
 
-      child._watch(
+      child.$watch(
         scope => (scope: any).someValue,
         listenerFn
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
     });
 
-    it('digests from root on _apply when isolated', function () {
+    it('digests from root on $apply when isolated', function () {
       (scope: any).someValue = 233;
-      const child1 = scope._new(true);
-      const child1child1 = child1._new();
+      const child1 = scope.$new(true);
+      const child1child1 = child1.$new();
       const listenerFn = sinon.spy();
 
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).someValue,
         listenerFn
       );
 
-      child1child1._apply(() => {});
+      child1child1.$apply(() => {});
       expect(listenerFn).to.have.been.calledOnce;
     });
 
-    it('schedules a digest from root on _evalAsync when isolated', function (done) {
+    it('schedules a digest from root on $evalAsync when isolated', function (done) {
       (scope: any).someValue = 233;
-      const child1 = scope._new(true);
-      const child1child1 = child1._new();
+      const child1 = scope.$new(true);
+      const child1child1 = child1.$new();
       const listenerFn = sinon.spy();
 
-      scope._watch(
+      scope.$watch(
         scope => (scope: any).someValue,
         listenerFn
       );
 
-      child1child1._evalAsync(() => {});
+      child1child1.$evalAsync(() => {});
       setTimeout(() => {
         expect(listenerFn).to.have.been.calledOnce;
         done();
       }, 10);
     });
 
-    it('executes _evalAsync functions on isolated scopes', function (done) {
-      const child = scope._new(true);
+    it('executes $evalAsync functions on isolated scopes', function (done) {
+      const child = scope.$new(true);
       const evalFn = sinon.spy();
 
-      child._evalAsync(evalFn);
+      child.$evalAsync(evalFn);
       setTimeout(() => {
         expect(evalFn).to.have.been.calledOnce;
         done();
       }, 10);
     });
 
-    it('executes __postDigest functions on isolated scopes', function () {
-      const child = scope._new(true);
+    it('executes $$postDigest functions on isolated scopes', function () {
+      const child = scope.$new(true);
       const postDigestFn = sinon.spy();
 
-      child.__postDigest(postDigestFn);
-      scope._digest();
+      child.$$postDigest(postDigestFn);
+      scope.$digest();
 
       expect(postDigestFn).to.have.been.calledOnce;
     });
 
-    it('coalesces _applyAsync functions in isolated scopes', function (done) {
-      const child1 = scope._new(true);
-      const child2 = scope._new(true);
+    it('coalesces $applyAsync functions in isolated scopes', function (done) {
+      const child1 = scope.$new(true);
+      const child2 = scope.$new(true);
       const watchFn = sinon.spy();
 
-      child1._watch(watchFn);
-      child1._applyAsync(scope => { (scope: any).someValue = 233; });
-      child2._applyAsync(scope => { (scope: any).someValue = 256; });
+      child1.$watch(watchFn);
+      child1.$applyAsync(scope => { (scope: any).someValue = 233; });
+      child2.$applyAsync(scope => { (scope: any).someValue = 256; });
 
       setTimeout(() => {
         expect(watchFn).to.have.been.calledTwice;
@@ -1639,115 +1639,115 @@ describe('Scope', function () {
 
     it('can take some other scope as the parent', function () {
       const anotherScope = new Scope();
-      const child = scope._new(false, anotherScope);
+      const child = scope.$new(false, anotherScope);
       const childWatcherFn = sinon.spy();
 
       (scope: any).someValue = 233;
       expect((child: any).someValue).to.equal(233);
 
-      child._watch(childWatcherFn);
+      child.$watch(childWatcherFn);
 
-      scope._digest();
+      scope.$digest();
       expect(childWatcherFn).to.have.not.been.called;
 
-      anotherScope._digest();
+      anotherScope.$digest();
       expect(childWatcherFn).to.have.been.calledTwice;
     });
 
-    it('not longer digests after _destroy', function () {
-      const child = scope._new();
+    it('not longer digests after $destroy', function () {
+      const child = scope.$new();
       const listenerFn = sinon.spy();
 
       (child: any).arr = [0, 1, 2];
-      child._watch(
+      child.$watch(
         scope => (scope: any).arr,
         listenerFn,
         true
       );
 
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledOnce;
 
       (child: any).arr.push(3);
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
 
-      child._destroy();
+      child.$destroy();
       (child: any).arr.push(4);
-      scope._digest();
+      scope.$digest();
       expect(listenerFn).to.have.been.calledTwice;
     });
   });
 
   describe('Optimizing', function () {
     it('removes constant watches after first invocation', function () {
-      scope._watch('[0, 1, 2]', () => {});
-      scope._digest();
+      scope.$watch('[0, 1, 2]', () => {});
+      scope.$digest();
 
-      expect(scope.__watchers).to.be.empty;
+      expect(scope.$$watchers).to.be.empty;
     });
 
     it('accepts one-time watches', function () {
       let theValue;
       (scope: any).someValue = 233;
-      scope._watch('::someValue', newValue => { theValue = newValue; });
-      scope._digest();
+      scope.$watch('::someValue', newValue => { theValue = newValue; });
+      scope.$digest();
 
       expect(theValue).to.equal(233);
     });
 
     it('removes one-time watchers after first invocation', function () {
       (scope: any).someValue = 233;
-      scope._watch('::someValue', () => {});
-      scope._digest();
+      scope.$watch('::someValue', () => {});
+      scope.$digest();
 
-      expect(scope.__watchers).to.be.empty;
+      expect(scope.$$watchers).to.be.empty;
     });
 
     it('does not remove one-time-watches until value is defined', function () {
-      scope._watch('::someValue', () => {});
-      scope._digest();
-      expect(scope.__watchers).to.have.lengthOf(1);
+      scope.$watch('::someValue', () => {});
+      scope.$digest();
+      expect(scope.$$watchers).to.have.lengthOf(1);
 
       (scope: any).someValue = 233;
-      scope._digest();
-      expect(scope.__watchers).to.have.lengthOf(0);
+      scope.$digest();
+      expect(scope.$$watchers).to.have.lengthOf(0);
     });
 
     it('does not remove one-time-watches until value stays defined', function () {
       (scope: any).someValue = 233;
 
-      scope._watch('::someValue', () => {});
-      const unwatchDeleter = scope._watch('::someValue', () => { delete (scope: any).someValue; });
+      scope.$watch('::someValue', () => {});
+      const unwatchDeleter = scope.$watch('::someValue', () => { delete (scope: any).someValue; });
 
-      scope._digest();
-      expect(scope.__watchers).to.have.lengthOf(2);
+      scope.$digest();
+      expect(scope.$$watchers).to.have.lengthOf(2);
 
       (scope: any).someValue = 233;
       unwatchDeleter();
-      expect(scope.__watchers).to.have.lengthOf(1);
-      scope._digest();
-      expect(scope.__watchers).to.have.lengthOf(0);
+      expect(scope.$$watchers).to.have.lengthOf(1);
+      scope.$digest();
+      expect(scope.$$watchers).to.have.lengthOf(0);
     });
 
     it('does not remove one-time-watches until all array items defined', function () {
-      scope._watch('::[0, 1, someValue]', () => {}, true);
-      scope._digest();
-      expect(scope.__watchers).to.have.lengthOf(1);
+      scope.$watch('::[0, 1, someValue]', () => {}, true);
+      scope.$digest();
+      expect(scope.$$watchers).to.have.lengthOf(1);
 
       (scope: any).someValue = 233;
-      scope._digest();
-      expect(scope.__watchers).to.have.lengthOf(0);
+      scope.$digest();
+      expect(scope.$$watchers).to.have.lengthOf(0);
     });
 
     it('does not remove one-time-watches until value stays defined', function () {
-      scope._watch('::{a: 1, b: someValue}', () => {}, true);
-      scope._digest();
-      expect(scope.__watchers).to.have.lengthOf(1);
+      scope.$watch('::{a: 1, b: someValue}', () => {}, true);
+      scope.$digest();
+      expect(scope.$$watchers).to.have.lengthOf(1);
 
       (scope: any).someValue = 233;
-      scope._digest();
-      expect(scope.__watchers).to.have.lengthOf(0);
+      scope.$digest();
+      expect(scope.$$watchers).to.have.lengthOf(0);
     });
 
     it('does not re-evaluate an array if its contents do not change', function () {
@@ -1756,17 +1756,17 @@ describe('Scope', function () {
       (scope: any).b = 2;
       (scope: any).c = 3;
 
-      scope._watch('[a, b, c]', (newValue) => { values.push(newValue); });
+      scope.$watch('[a, b, c]', (newValue) => { values.push(newValue); });
 
-      scope._digest();
+      scope.$digest();
       expect(values).to.have.lengthOf(1);
       expect(values[0]).to.deep.equal([1, 2, 3]);
 
-      scope._digest();
+      scope.$digest();
       expect(values).to.have.lengthOf(1);
 
       (scope: any).c = 4;
-      scope._digest();
+      scope.$digest();
       expect(values).to.have.lengthOf(2);
       expect(values[1]).to.deep.equal([1, 2, 4]);
     });

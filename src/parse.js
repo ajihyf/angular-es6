@@ -421,17 +421,17 @@ class AST {
     this.lexer = lexer;
   }
 
-  peek(...expections: Array<?string>): ?LexToken {
+  peek(...expectations: Array<?string>): ?LexToken {
     if (this.tokens.length > 0) {
       const text = this.tokens[0].text;
-      if (_.includes(expections, text) || _.every(expections, _.isNil)) {
+      if (_.includes(expectations, text) || _.every(expectations, _.isNil)) {
         return this.tokens[0];
       }
     }
   }
 
-  expect(...expections: Array<?string>): ?LexToken {
-    const token = this.peek(...expections);
+  expect(...expectations: Array<?string>): ?LexToken {
+    const token = this.peek(...expectations);
     if (token) {
       return this.tokens.shift();
     }
@@ -1078,7 +1078,7 @@ function parse(expr?: string | Function): ParsedFunction {
   }
 }
 
-interface ParsedFunction {
+export interface ParsedFunction {
   (scope?: any, locals?: any): any;
   literal?: boolean,
   constant?: boolean,

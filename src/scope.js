@@ -1,6 +1,7 @@
 /* @flow */
 import _ from 'lodash';
 import parse from './parse';
+import type { ParsedFunction } from './parse'; // eslint-disable-line
 
 function areEqual(newValue: any, oldValue: any, valueEq: boolean) {
   if (valueEq) {
@@ -47,12 +48,12 @@ type AcceptableExpr = CallWith<Scope, any> | string;
 const initWatchVal: AnyFunction = () => {};
 const maxTTL: number = 10; // time to live
 
-function constantWatchDelegate(scope: Scope, listnerFn?: ListenerFunction, valueEq?: boolean, watchFn: CallWith<Scope, any>) {
-  const unwatch = scope._watch(() => watchFn(scope),
+function constantWatchDelegate(scope: Scope, listenerFn?: ListenerFunction, valueEq?: boolean, watchFn: ParsedFunction) {
+  const unwatch = scope.$watch(() => watchFn(scope),
   (...args) => {
-    if (_.isFunction(listnerFn)) {
+    if (_.isFunction(listenerFn)) {
       // $FlowIssue
-      listnerFn.call(scope, ...args);
+      listenerFn.call(scope, ...args);
     }
     unwatch();
   }, valueEq);
@@ -63,18 +64,18 @@ function isAnyUndefined(val: any): boolean {
   return _.some(val, _.isUndefined);
 }
 
-function oneTimeWatchDelegate(scope: Scope, listnerFn?: ListenerFunction,
-          valueEq?: boolean, watchFn: CallWith<Scope, any>, literal?: boolean): AnyFunction {
+function oneTimeWatchDelegate(scope: Scope, listenerFn?: ListenerFunction,
+          valueEq?: boolean, watchFn: ParsedFunction, literal?: boolean): AnyFunction {
   let lastValue;
   let testFn = literal ? isAnyUndefined : _.isUndefined;
-  const unwatch = scope._watch(() => watchFn(scope),
+  const unwatch = scope.$watch(() => watchFn(scope),
   (newValue, ...args) => {
     lastValue = newValue;
-    if (_.isFunction(listnerFn)) {
+    if (_.isFunction(listenerFn)) {
       // $FlowIssue
-      listnerFn.call(scope, newValue, ...args);
+      listenerFn.call(scope, newValue, ...args);
     }
-    scope.__postDigest(() => {
+    scope.$$postDigest(() => {
       if (!testFn(lastValue)) {
         unwatch();
       }
@@ -88,11 +89,14 @@ function expressionInputDirtyCheck(newValue: any, oldValue: any): boolean {
 }
 
 function inputWatchDelegate(scope: Scope, listenerFn?: ListenerFunction,
-          valueEq?: boolean, watchFn: CallWith<Scope, any>): AnyFunction {
+          valueEq?: boolean, watchFn: ParsedFunction): AnyFunction {
   const inputExpressions = watchFn.inputs;
+  if (!inputExpressions) {
+    throw new Error('Input not found in watchFn');
+  }
   const oldValues = _.times(inputExpressions.length, _.constant(() => {}));
   let lastResult;
-  return scope._watch(() => {
+  return scope.$watch(() => {
     let changed = false;
     _.each(inputExpressions, (inputExpr, i) => {
       const newValue = inputExpr(scope);
@@ -109,22 +113,22 @@ function inputWatchDelegate(scope: Scope, listenerFn?: ListenerFunction,
 }
 
 class Scope {
-  __watchers: Watcher[] = [];
-  __lastDirtyWatch: ?Watcher = null;
-  __asyncQueue: AsyncQueueItem[] = [];
-  __applyAsyncQueue: AnyFunction[] = [];
-  __applyAsyncId: ?number = null;
-  __phase: ?('_apply' | '_digest') = null;
-  __postDigestQueue: AnyFunction[] = [];
-  __children: Scope[] = [];
-  _root: Scope = this;
-  _parent: ?Scope = null;
-  __listeners: { [key: string]: (?ScopeEventListener)[] } = {};
+  $$watchers: Watcher[] = [];
+  $$lastDirtyWatch: ?Watcher = null;
+  $$asyncQueue: AsyncQueueItem[] = [];
+  $$applyAsyncQueue: AnyFunction[] = [];
+  $$applyAsyncId: ?number = null;
+  $$phase: ?('$apply' | '$digest') = null;
+  $$postDigestQueue: AnyFunction[] = [];
+  $$children: Scope[] = [];
+  $root: Scope = this;
+  $parent: ?Scope = null;
+  $$listeners: { [key: string]: (?ScopeEventListener)[] } = {};
 
-  _on(eventName: string, listener: ScopeEventListener): AnyFunction {
-    let listeners = this.__listeners[eventName];
+  $on(eventName: string, listener: ScopeEventListener): AnyFunction {
+    let listeners = this.$$listeners[eventName];
     if (!listeners) {
-      this.__listeners[eventName] = listeners = [];
+      this.$$listeners[eventName] = listeners = [];
     }
     listeners.push(listener);
     return () => {
@@ -135,7 +139,7 @@ class Scope {
     };
   }
 
-  _emit(eventName: string, ...args: any[]): ScopeEvent {
+  $emit(eventName: string, ...args: any[]): ScopeEvent {
     let propagationStopped = false;
     const event: ScopeEvent = {
       name: eventName,
@@ -152,14 +156,14 @@ class Scope {
     let scope = this;
     do {
       event.currentScope = scope;
-      scope.__fireEventOnScope(eventName, event, args);
-      scope = scope._parent;
+      scope.$$fireEventOnScope(eventName, event, args);
+      scope = scope.$parent;
     } while (scope && !propagationStopped); // eslint-disable-line no-unmodified-loop-condition
     event.currentScope = null;
     return event;
   }
 
-  _broadcast(eventName: string, ...args: any[]): ScopeEvent {
+  $broadcast(eventName: string, ...args: any[]): ScopeEvent {
     const event: ScopeEvent = {
       name: eventName,
       targetScope: this,
@@ -169,17 +173,17 @@ class Scope {
         event.defaultPrevented = true;
       }
     };
-    this.__everyScope(scope => {
+    this.$$everyScope(scope => {
       event.currentScope = scope;
-      scope.__fireEventOnScope(eventName, event, args);
+      scope.$$fireEventOnScope(eventName, event, args);
       return true;
     });
     event.currentScope = null;
     return event;
   }
 
-  __fireEventOnScope(eventName: string, event: ScopeEvent, args: any[]) {
-    const listeners = this.__listeners[eventName] || [];
+  $$fireEventOnScope(eventName: string, event: ScopeEvent, args: any[]) {
+    const listeners = this.$$listeners[eventName] || [];
     let i = 0;
     const listenerArgs = [event, ...args];
     while (i < listeners.length) {
@@ -196,74 +200,74 @@ class Scope {
     }
   }
 
-  __postDigest(fn: AnyFunction) {
-    this.__postDigestQueue.push(fn);
+  $$postDigest(fn: AnyFunction) {
+    this.$$postDigestQueue.push(fn);
   }
 
-  _apply(expr: AcceptableExpr) {
+  $apply(expr: AcceptableExpr) {
     try {
-      this.__beginPhase('_apply');
-      return this._eval(expr);
+      this.$$beginPhase('$apply');
+      return this.$eval(expr);
     } finally {
-      this.__clearPhase();
-      this._root._digest();
+      this.$$clearPhase();
+      this.$root.$digest();
     }
   }
 
-  _applyAsync(expr: AcceptableExpr) {
-    this.__applyAsyncQueue.push(() => {
-      this._eval(expr);
+  $applyAsync(expr: AcceptableExpr) {
+    this.$$applyAsyncQueue.push(() => {
+      this.$eval(expr);
     });
-    if (this._root.__applyAsyncId === null) {
-      this._root.__applyAsyncId = setTimeout(() => {
-        this._apply(() => {
-          this.__flushApplyAsync();
+    if (this.$root.$$applyAsyncId === null) {
+      this.$root.$$applyAsyncId = setTimeout(() => {
+        this.$apply(() => {
+          this.$$flushApplyAsync();
         });
       }, 0);
     }
   }
 
-  __flushApplyAsync() {
-    while (this.__applyAsyncQueue.length) {
+  $$flushApplyAsync() {
+    while (this.$$applyAsyncQueue.length) {
       try {
-        this.__applyAsyncQueue.shift()();
+        this.$$applyAsyncQueue.shift()();
       } catch (err) {
         console.error(err);
       }
     }
-    this._root.__applyAsyncId = null;
+    this.$root.$$applyAsyncId = null;
   }
 
-  __beginPhase(phase: ('_apply' | '_digest')) {
-    if (this.__phase) {
-      throw new Error(`${this.__phase} already in progress.`);
+  $$beginPhase(phase: ('$apply' | '$digest')) {
+    if (this.$$phase) {
+      throw new Error(`${this.$$phase} already in progress.`);
     }
-    this.__phase = phase;
+    this.$$phase = phase;
   }
 
-  __clearPhase() {
-    this.__phase = null;
+  $$clearPhase() {
+    this.$$phase = null;
   }
 
-  _eval(expr: AcceptableExpr, locals?: any): any {
+  $eval(expr: AcceptableExpr, locals?: any): any {
     return parse(expr)(this, locals);
   }
 
-  _evalAsync(expr: AcceptableExpr) {
-    if (!this.__phase && !this.__asyncQueue.length) {
+  $evalAsync(expr: AcceptableExpr) {
+    if (!this.$$phase && !this.$$asyncQueue.length) {
       setTimeout(() => {
-        if (this.__asyncQueue.length) {
-          this._root._digest();
+        if (this.$$asyncQueue.length) {
+          this.$root.$digest();
         }
       }, 0);
     }
-    this.__asyncQueue.push({
+    this.$$asyncQueue.push({
       scope: this,
       expression: expr
     });
   }
 
-  _watch(watchFn: AcceptableExpr, listenerFn?: ListenerFunction<any>, valueEq?: boolean = false): AnyFunction {
+  $watch(watchFn: AcceptableExpr, listenerFn?: ListenerFunction<any>, valueEq?: boolean = false): AnyFunction {
     const parsedWatchFn = parse(watchFn);
 
     if (parsedWatchFn.constant) {
@@ -280,18 +284,18 @@ class Scope {
       valueEq,
       last: initWatchVal
     };
-    this.__watchers.unshift(watcher);
-    this._root.__lastDirtyWatch = null;
+    this.$$watchers.unshift(watcher);
+    this.$root.$$lastDirtyWatch = null;
     return () => {
-      const index = this.__watchers.indexOf(watcher);
+      const index = this.$$watchers.indexOf(watcher);
       if (index >= 0) {
-        this.__watchers.splice(index, 1);
-        this._root.__lastDirtyWatch = null;
+        this.$$watchers.splice(index, 1);
+        this.$root.$$lastDirtyWatch = null;
       }
     };
   }
 
-  _watchGroup(watchFns: CallWith<Scope, any>[], listenerFn?: ListenerFunction<any[]>): AnyFunction {
+  $watchGroup(watchFns: CallWith<Scope, any>[], listenerFn?: ListenerFunction<any[]>): AnyFunction {
     const newValues: any[] = new Array(watchFns.length);
     const oldValues: any[] = new Array(watchFns.length);
     let changeReactionSchedules = false;
@@ -299,7 +303,7 @@ class Scope {
 
     if (watchFns.length === 0) {
       let shouldCall = true;
-      this._evalAsync(() => {
+      this.$evalAsync(() => {
         if (shouldCall && listenerFn != null) {
           listenerFn(newValues, newValues, this);
         }
@@ -321,12 +325,12 @@ class Scope {
     };
 
     const destroyFns: AnyFunction[] = _.map(watchFns, (watchFn, i) => {
-      return this._watch(watchFn, (newValue, oldValue) => {
+      return this.$watch(watchFn, (newValue, oldValue) => {
         newValues[i] = newValue;
         oldValues[i] = oldValue;
         if (!changeReactionSchedules) {
           changeReactionSchedules = true;
-          this._evalAsync(watchGroupListener);
+          this.$evalAsync(watchGroupListener);
         }
       });
     });
@@ -338,7 +342,7 @@ class Scope {
     };
   }
 
-  _watchCollection(watchFn: AcceptableExpr, listenerFn: ListenerFunction<any>): AnyFunction {
+  $watchCollection(watchFn: AcceptableExpr, listenerFn: ListenerFunction<any>): AnyFunction {
     let newValue, oldValue;
     let changeCount: number = 0;
     let oldLength: number;
@@ -420,26 +424,26 @@ class Scope {
       }
     };
 
-    return this._watch(internalWatchFn, internalListenerFn);
+    return this.$watch(internalWatchFn, internalListenerFn);
   }
 
-  __digestOnce(): boolean {
+  $$digestOnce(): boolean {
     let dirty: boolean = false;
     let continueLoop: boolean = true;
-    this.__everyScope(scope => {
-      _.eachRight(scope.__watchers, watcher => {
+    this.$$everyScope(scope => {
+      _.eachRight(scope.$$watchers, watcher => {
         try {
           if (watcher) {
             const newValue = watcher.watchFn(scope);
             const oldValue = watcher.last;
             if (!areEqual(newValue, oldValue, watcher.valueEq)) {
-              scope._root.__lastDirtyWatch = watcher;
+              scope.$root.$$lastDirtyWatch = watcher;
               watcher.last = watcher.valueEq ? _.cloneDeep(newValue) : newValue;
               watcher.listenerFn(newValue,
                 (oldValue === initWatchVal ? newValue : oldValue),
                 scope);
               dirty = true;
-            } else if (scope._root.__lastDirtyWatch === watcher) {
+            } else if (scope.$root.$$lastDirtyWatch === watcher) {
               continueLoop = false;
               return false;
             }
@@ -453,86 +457,86 @@ class Scope {
     return dirty;
   }
 
-  _digest() {
+  $digest() {
     let dirty: boolean = false;
     let ttl: number = maxTTL;
-    this._root.__lastDirtyWatch = null;
-    this.__beginPhase('_digest');
+    this.$root.$$lastDirtyWatch = null;
+    this.$$beginPhase('$digest');
 
-    if (this._root.__applyAsyncId) {
-      clearTimeout(this._root.__applyAsyncId);
-      this.__flushApplyAsync();
+    if (this.$root.$$applyAsyncId) {
+      clearTimeout(this.$root.$$applyAsyncId);
+      this.$$flushApplyAsync();
     }
 
     do {
-      while (this.__asyncQueue.length) {
+      while (this.$$asyncQueue.length) {
         try {
-          const asyncTask = this.__asyncQueue.shift();
-          asyncTask.scope._eval(asyncTask.expression);
+          const asyncTask = this.$$asyncQueue.shift();
+          asyncTask.scope.$eval(asyncTask.expression);
         } catch (err) {
           console.error(err);
         }
       }
-      dirty = this.__digestOnce();
-      if (dirty || this.__asyncQueue.length) {
+      dirty = this.$$digestOnce();
+      if (dirty || this.$$asyncQueue.length) {
         ttl--;
         if (ttl < 0) {
-          this.__clearPhase();
+          this.$$clearPhase();
           throw new Error('Max digest iterations reached');
         }
       }
-    } while (dirty || this.__asyncQueue.length);
+    } while (dirty || this.$$asyncQueue.length);
 
-    while (this.__postDigestQueue.length) {
+    while (this.$$postDigestQueue.length) {
       try {
-        this.__postDigestQueue.shift()();
+        this.$$postDigestQueue.shift()();
       } catch (err) {
         console.error(err);
       }
     }
 
-    this.__clearPhase();
+    this.$$clearPhase();
   }
 
-  _new(isolated: boolean = false, parent?: Scope): Scope {
+  $new(isolated: boolean = false, parent?: Scope): Scope {
     if (!parent) parent = this;
     let child: Scope;
     if (isolated) {
       child = new Scope();
-      child._root = parent._root;
-      child.__asyncQueue = parent.__asyncQueue;
-      child.__postDigestQueue = parent.__postDigestQueue;
-      child.__applyAsyncQueue = parent.__applyAsyncQueue;
+      child.$root = parent.$root;
+      child.$$asyncQueue = parent.$$asyncQueue;
+      child.$$postDigestQueue = parent.$$postDigestQueue;
+      child.$$applyAsyncQueue = parent.$$applyAsyncQueue;
     } else {
       child = Object.create(this);
     }
-    parent.__children.push(child);
-    child.__watchers = [];
-    child.__children = [];
-    child.__listeners = {};
-    child._parent = parent;
+    parent.$$children.push(child);
+    child.$$watchers = [];
+    child.$$children = [];
+    child.$$listeners = {};
+    child.$parent = parent;
     return child;
   }
 
-  __everyScope(fn: CallWith<Scope, boolean>): boolean {
+  $$everyScope(fn: CallWith<Scope, boolean>): boolean {
     if (fn(this)) {
-      return this.__children.every(child => child.__everyScope(fn));
+      return this.$$children.every(child => child.$$everyScope(fn));
     } else {
       return false;
     }
   }
 
-  _destroy() {
-    this._broadcast('_destroy');
-    if (this._parent) {
-      const siblings = this._parent.__children;
+  $destroy() {
+    this.$broadcast('$destroy');
+    if (this.$parent) {
+      const siblings = this.$parent.$$children;
       const index = siblings.indexOf(this);
       if (index >= 0) {
         siblings.splice(index, 1);
       }
     }
-    this.__watchers = [];
-    this.__listeners = {};
+    this.$$watchers = [];
+    this.$$listeners = {};
   }
 }
 
