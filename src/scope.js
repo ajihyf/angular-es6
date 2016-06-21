@@ -63,7 +63,8 @@ function isAnyUndefined(val: any): boolean {
   return _.some(val, _.isUndefined);
 }
 
-function oneTimeWatchDelegate(scope: Scope, listnerFn?: ListenerFunction, valueEq?: boolean, watchFn: CallWith<Scope, any>, literal?: boolean) {
+function oneTimeWatchDelegate(scope: Scope, listnerFn?: ListenerFunction,
+          valueEq?: boolean, watchFn: CallWith<Scope, any>, literal?: boolean): AnyFunction {
   let lastValue;
   let testFn = literal ? isAnyUndefined : _.isUndefined;
   const unwatch = scope._watch(() => watchFn(scope),
@@ -82,13 +83,38 @@ function oneTimeWatchDelegate(scope: Scope, listnerFn?: ListenerFunction, valueE
   return unwatch;
 }
 
+function expressionInputDirtyCheck(newValue: any, oldValue: any): boolean {
+  return newValue === oldValue || (_.isNumber(newValue) && _.isNaN(newValue) && _.isNumber(oldValue) && _.isNaN(oldValue));
+}
+
+function inputWatchDelegate(scope: Scope, listenerFn?: ListenerFunction,
+          valueEq?: boolean, watchFn: CallWith<Scope, any>): AnyFunction {
+  const inputExpressions = watchFn.inputs;
+  const oldValues = _.times(inputExpressions.length, _.constant(() => {}));
+  let lastResult;
+  return scope._watch(() => {
+    let changed = false;
+    _.each(inputExpressions, (inputExpr, i) => {
+      const newValue = inputExpr(scope);
+      if (changed || !expressionInputDirtyCheck(newValue, oldValues[i])) {
+        changed = true;
+        oldValues[i] = newValue;
+      }
+    });
+    if (changed) {
+      lastResult = watchFn(scope);
+    }
+    return lastResult;
+  }, listenerFn, valueEq);
+}
+
 class Scope {
   __watchers: Watcher[] = [];
   __lastDirtyWatch: ?Watcher = null;
   __asyncQueue: AsyncQueueItem[] = [];
   __applyAsyncQueue: AnyFunction[] = [];
   __applyAsyncId: ?number = null;
-  __phase: ?string = null;
+  __phase: ?('_apply' | '_digest') = null;
   __postDigestQueue: AnyFunction[] = [];
   __children: Scope[] = [];
   _root: Scope = this;
@@ -208,7 +234,7 @@ class Scope {
     this._root.__applyAsyncId = null;
   }
 
-  __beginPhase(phase: string) {
+  __beginPhase(phase: ('_apply' | '_digest')) {
     if (this.__phase) {
       throw new Error(`${this.__phase} already in progress.`);
     }
@@ -244,6 +270,8 @@ class Scope {
       return constantWatchDelegate(this, listenerFn, valueEq, parsedWatchFn);
     } else if (parsedWatchFn.oneTime) {
       return oneTimeWatchDelegate(this, listenerFn, valueEq, parsedWatchFn, parsedWatchFn.literal);
+    } else if (parsedWatchFn.inputs) {
+      return inputWatchDelegate(this, listenerFn, valueEq, parsedWatchFn);
     }
 
     const watcher: Watcher = {

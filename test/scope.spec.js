@@ -1749,5 +1749,26 @@ describe('Scope', function () {
       scope._digest();
       expect(scope.__watchers).to.have.lengthOf(0);
     });
+
+    it('does not re-evaluate an array if its contents do not change', function () {
+      const values = [];
+      (scope: any).a = 1;
+      (scope: any).b = 2;
+      (scope: any).c = 3;
+
+      scope._watch('[a, b, c]', (newValue) => { values.push(newValue); });
+
+      scope._digest();
+      expect(values).to.have.lengthOf(1);
+      expect(values[0]).to.deep.equal([1, 2, 3]);
+
+      scope._digest();
+      expect(values).to.have.lengthOf(1);
+
+      (scope: any).c = 4;
+      scope._digest();
+      expect(values).to.have.lengthOf(2);
+      expect(values[0]).to.deep.equal([1, 2, 4]);
+    });
   });
 });

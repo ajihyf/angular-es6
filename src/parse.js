@@ -724,10 +724,12 @@ function isDefined<U, V>(value: U, defaultValue: V): U | V {
 }
 
 type ASTCompilerState = {
-  body: string[],
+  functions: { [k: string]: { body: string[], vars: string[] } },
   nextId: number,
-  vars: string[],
-  filters: { [k: string]: string }
+  filters: { [k: string]: string },
+  computing: string,
+  inputs: string[],
+  stage: 'main' | 'inputs'
 };
 
 type CallContext = {
@@ -740,21 +742,51 @@ class ASTCompiler {
   state: ASTCompilerState;
   astBuilder: AST;
 
+  static getInputs(ast: ASTProgramNode): ASTNode[] {
+    const body = ast.body;
+    if (body.length !== 1) {
+      return [];
+    }
+    const candidate = body[0].toWatch;
+    if (candidate.length !== 1 || candidate[0] !== body[0]) {
+      return candidate;
+    }
+    return [];
+  }
+
   constructor(astBuilder: AST) {
     this.astBuilder = astBuilder;
   }
 
   compile(text: string): ParsedFunction {
     const ast: ASTProgramNode = this.astBuilder.ast(text);
-    this.state = { body: [], nextId: 0, vars: [], filters: {} };
+    this.state = {
+      nextId: 0,
+      filters: {},
+      functions: { fn: { body: [], vars: [] } },
+      inputs: [],
+      computing: 'fn',
+      stage: 'main'
+    };
+    this.state.stage = 'inputs';
+    _.each(ASTCompiler.getInputs(ast), (input, index) => {
+      const inputKey = 'fn' + index;
+      this.state.functions[inputKey] = { body: [], vars: [] };
+      this.state.computing = inputKey;
+      this.state.functions[inputKey].body.push(`return ${this.recurse(input)};`);
+      this.state.inputs.push(inputKey);
+    });
     this.recurse(ast);
+    this.state.computing = 'fn';
+    this.state.stage = 'main';
     // s means scope, l means locals
     const fnString = `
     ${this.filterPrefix()}
     var fn = function(s, l) {
-      ${this.state.vars.length ? `var ${this.state.vars.join(',')};` : ''}
-      ${this.state.body.join('')}
-    }
+      ${this.state.functions.fn.vars.length ? `var ${this.state.functions.fn.vars.join(',')};` : ''}
+      ${this.state.functions.fn.body.join('')}
+    };
+    ${this.watchFns()}
     return fn;
     `;
     /* eslint-disable no-new-func */
@@ -774,6 +806,19 @@ class ASTCompiler {
     fn.literal = AST.isLiteral(ast);
     fn.constant = ast.constant;
     return fn;
+  }
+
+  watchFns(): string {
+    const result = this.state.inputs.map(inputName => {
+      return `var ${inputName} = function (s) {
+        ${this.state.functions[inputName].vars.length ? `var ${this.state.functions[inputName].vars.join(',')};` : ''}
+        ${this.state.functions[inputName].body.join('')}
+      };`;
+    });
+    if (result.length) {
+      result.push(`fn.inputs = [${this.state.inputs.join(',')}];`);
+    }
+    return result.join('');
   }
 
   filterPrefix(): string {
@@ -796,7 +841,7 @@ class ASTCompiler {
   nextId(skip: boolean = false): string {
     const id = `$$vv${this.state.nextId++}`;
     if (!skip) {
-      this.state.vars.push(id);
+      this.state.functions[this.state.computing].vars.push(id);
     }
     return id;
   }
@@ -807,9 +852,9 @@ class ASTCompiler {
       return escape(ast.value);
     } else if (ast instanceof ASTProgramNode) {
       _.each(_.initial(ast.body), stmt => {
-        this.state.body.push(this.recurse(stmt), ';');
+        this.state.functions[this.state.computing].body.push(this.recurse(stmt), ';');
       });
-      this.state.body.push(`return ${this.recurse(_.last(ast.body))};`);
+      this.state.functions[this.state.computing].body.push(`return ${this.recurse(_.last(ast.body))};`);
     } else if (ast instanceof ASTArrayExpressionNode) {
       const elements = _.map(ast.elements, element => this.recurse(element));
       return `[${elements.join(',')}]`;
@@ -824,20 +869,26 @@ class ASTCompiler {
     } else if (ast instanceof ASTIdentifierNode) {
       ensureSafeMemberName(ast.name);
       varId = this.nextId();
+      let localsCheck: string;
+      if (this.state.stage === 'inputs') {
+        localsCheck = 'false';
+      } else {
+        localsCheck = ASTCompiler.getHasOwnProperty('l', ast.name);
+      }
       this.if_(
-        ASTCompiler.getHasOwnProperty('l', ast.name),
+        localsCheck,
         ASTCompiler.assign(varId, ASTCompiler.nonComputedMember('l', ast.name)));
       if (create) {
         this.if_(
-          `${ASTCompiler.not(ASTCompiler.getHasOwnProperty('l', ast.name))}
+          `${ASTCompiler.not(localsCheck)}
           && s && ${ASTCompiler.not(ASTCompiler.getHasOwnProperty('s', ast.name))}`,
           ASTCompiler.assign(ASTCompiler.nonComputedMember('s', ast.name), '{}'));
       }
       this.if_(
-        `${ASTCompiler.not(ASTCompiler.getHasOwnProperty('l', ast.name))} && s`,
+        `${ASTCompiler.not(localsCheck)} && s`,
         ASTCompiler.assign(varId, ASTCompiler.nonComputedMember('s', ast.name)));
       if (inContext) {
-        inContext.context = `${ASTCompiler.getHasOwnProperty('l', ast.name)} ? l : s`;
+        inContext.context = `${localsCheck} ? l : s`;
         inContext.name = ast.name;
         inContext.computed = false;
       }
@@ -932,14 +983,14 @@ class ASTCompiler {
       return `(${this.recurse(ast.left)}) ${ast.operator} (${this.recurse(ast.right)})`;
     } else if (ast instanceof ASTLogicalExpressionNode) {
       varId = this.nextId();
-      this.state.body.push(ASTCompiler.assign(varId, this.recurse(ast.left)));
+      this.state.functions[this.state.computing].body.push(ASTCompiler.assign(varId, this.recurse(ast.left)));
       this.if_(ast.operator === '&&' ? varId : ASTCompiler.not(varId),
         ASTCompiler.assign(varId, this.recurse(ast.right)));
       return varId;
     } else if (ast instanceof ASTConditionalExpressionNode) {
       varId = this.nextId();
       const testId = this.nextId();
-      this.state.body.push(ASTCompiler.assign(testId, this.recurse(ast.test)));
+      this.state.functions[this.state.computing].body.push(ASTCompiler.assign(testId, this.recurse(ast.test)));
       this.if_(testId,
         ASTCompiler.assign(varId, this.recurse(ast.consequent)));
       this.if_(ASTCompiler.not(testId),
@@ -951,19 +1002,19 @@ class ASTCompiler {
   }
 
   addEnsureSafeFunction(expr: string) {
-    this.state.body.push(`ensureSafeFunction(${expr});`);
+    this.state.functions[this.state.computing].body.push(`ensureSafeFunction(${expr});`);
   }
 
   addEnsureSafeMemberName(expr: string) {
-    this.state.body.push(`ensureSafeMemberName(${expr});`);
+    this.state.functions[this.state.computing].body.push(`ensureSafeMemberName(${expr});`);
   }
 
   addEnsureSafeObject(expr: string) {
-    this.state.body.push(`ensureSafeObject(${expr});`);
+    this.state.functions[this.state.computing].body.push(`ensureSafeObject(${expr});`);
   }
 
   if_(test: string, consequent: string) {
-    this.state.body.push(`if(${test}){${consequent}}`);
+    this.state.functions[this.state.computing].body.push(`if(${test}){${consequent}}`);
   }
 
   static isDefined(value: any, defaultValue: any): string {
@@ -1031,7 +1082,8 @@ interface ParsedFunction {
   (scope?: any, locals?: any): any;
   literal?: boolean,
   constant?: boolean,
-  oneTime?: boolean
+  oneTime?: boolean,
+  inputs?: Function[]
 }
 
 export default parse;
