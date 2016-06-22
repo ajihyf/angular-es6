@@ -406,6 +406,11 @@ class ASTConditionalExpressionNode {
   }
 }
 
+class ASTNGValueParamter {
+  constant: boolean = false;
+  toWatch: ASTNode[] = [];
+}
+
 const LanguageConstants: { [key: string]: (ASTThisExpressionNode | ASTLiteralNode) } = {
   'this': new ASTThisExpressionNode(),
   'null': new ASTLiteralNode(null),
@@ -675,6 +680,29 @@ class AST {
             body[0] instanceof ASTArrayExpressionNode ||
             body[0] instanceof ASTObjectNode));
   }
+
+  static getInputs(ast: ASTProgramNode): ASTNode[] {
+    const body = ast.body;
+    if (body.length !== 1) {
+      return [];
+    }
+    const candidate = body[0].toWatch;
+    if (candidate.length !== 1 || candidate[0] !== body[0]) {
+      return candidate;
+    }
+    return [];
+  }
+
+  static isAssignable(ast: ASTNode) {
+    return ast instanceof ASTIdentifierNode || ast instanceof ASTNonComputedMemberExpressionNode || ast instanceof ASTComputedMemberExpressionNode;
+  }
+
+  static assignableAST(ast: ASTProgramNode): ?ASTAssignmentExpressionNode {
+    const body = ast.body;
+    if (body.length === 1 && AST.isAssignable(body[0])) {
+      return new ASTAssignmentExpressionNode(body[0], new ASTNGValueParamter());
+    }
+  }
 }
 
 function ensureSafeMemberName(name: string) {
@@ -730,7 +758,7 @@ type ASTCompilerState = {
   filters: { [k: string]: string },
   computing: string,
   inputs: string[],
-  stage: 'main' | 'inputs'
+  stage: 'main' | 'inputs' | 'assign'
 };
 
 type CallContext = {
@@ -743,18 +771,6 @@ class ASTCompiler {
   state: ASTCompilerState;
   astBuilder: AST;
 
-  static getInputs(ast: ASTProgramNode): ASTNode[] {
-    const body = ast.body;
-    if (body.length !== 1) {
-      return [];
-    }
-    const candidate = body[0].toWatch;
-    if (candidate.length !== 1 || candidate[0] !== body[0]) {
-      return candidate;
-    }
-    return [];
-  }
-
   constructor(astBuilder: AST) {
     this.astBuilder = astBuilder;
   }
@@ -764,22 +780,37 @@ class ASTCompiler {
     this.state = {
       nextId: 0,
       filters: {},
-      functions: { fn: { body: [], vars: [] } },
+      functions: { fn: { body: [], vars: [] }, assign: { body: [], vars: [] } },
       inputs: [],
       computing: 'fn',
       stage: 'main'
     };
+
     this.state.stage = 'inputs';
-    _.each(ASTCompiler.getInputs(ast), (input, index) => {
+    _.each(AST.getInputs(ast), (input, index) => {
       const inputKey = 'fn' + index;
       this.state.functions[inputKey] = { body: [], vars: [] };
       this.state.computing = inputKey;
       this.state.functions[inputKey].body.push(`return ${this.recurse(input)};`);
       this.state.inputs.push(inputKey);
     });
+
+    this.state.stage = 'assign';
+    const assignable = AST.assignableAST(ast);
+    let extra = 'fn.assign = function () {};';
+    if (assignable) {
+      this.state.computing = 'assign';
+      this.state.functions.assign.body.push(this.recurse(assignable));
+      extra = `fn.assign = function (s, v, l) {
+        ${this.state.functions.assign.vars.length ? `var ${this.state.functions.assign.vars.join(',')};` : ''}
+        ${this.state.functions.assign.body.join('')}
+      };`;
+    }
+
     this.state.computing = 'fn';
     this.state.stage = 'main';
     this.recurse(ast);
+
     // s means scope, l means locals
     const fnString = `
     ${this.filterPrefix()}
@@ -788,10 +819,11 @@ class ASTCompiler {
       ${this.state.functions.fn.body.join('')}
     };
     ${this.watchFns()}
+    ${extra}
     return fn;
     `;
     /* eslint-disable no-new-func */
-    const fn: ParsedFunction = new Function(
+    const fn = new Function(
       'ensureSafeMemberName',
       'ensureSafeObject',
       'ensureSafeFunction',
@@ -804,9 +836,9 @@ class ASTCompiler {
       filter,
       isDefined);
     /* eslint-enable no-new-func */
-    fn.literal = AST.isLiteral(ast);
-    fn.constant = ast.constant;
-    return fn;
+    (fn: any).literal = AST.isLiteral(ast);
+    (fn: any).constant = ast.constant;
+    return (fn: any);
   }
 
   watchFns(): string {
@@ -997,6 +1029,8 @@ class ASTCompiler {
       this.if_(ASTCompiler.not(testId),
         ASTCompiler.assign(varId, this.recurse(ast.alternate)));
       return varId;
+    } else if (ast instanceof ASTNGValueParamter) {
+      return 'v';
     } else {
       throw new Error('Unknown ASTNode Type');
     }
@@ -1084,7 +1118,8 @@ export interface ParsedFunction {
   literal?: boolean,
   constant?: boolean,
   oneTime?: boolean,
-  inputs?: Function[]
+  inputs?: Function[],
+  assign: Function
 }
 
 export default parse;

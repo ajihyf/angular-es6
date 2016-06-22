@@ -41,6 +41,35 @@ describe('Parse', function () {
     expect(fn()).to.equal(233);
   });
 
+  describe('Assign', function () {
+    it('allows calling assign on identifier expressions', function () {
+      const fn = parse('someValue');
+      expect(fn).to.have.property('assign');
+
+      const scope: any = {};
+      fn.assign(scope, 233);
+      expect(scope.someValue).to.equal(233);
+    });
+
+    it('allows calling assign on non-computed member expressions', function () {
+      const fn = parse('obj.a');
+      expect(fn).to.have.property('assign');
+
+      const scope: any = {};
+      fn.assign(scope, 233);
+      expect(scope.obj).to.deep.equal({ a: 233 });
+    });
+
+    it('allows calling assign on computed member expressions', function () {
+      const fn = parse('obj["a"]');
+      expect(fn).to.have.property('assign');
+
+      const scope: any = {};
+      fn.assign(scope, 233);
+      expect(scope.obj).to.deep.equal({ a: 233 });
+    });
+  });
+
   describe('Mark', function () {
     it('marks integers literal', function () {
       expect(parse('233')).to.have.property('literal', true);
